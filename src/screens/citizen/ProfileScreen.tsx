@@ -1,0 +1,504 @@
+// src/screens/citizen/ProfileScreen.tsx
+import React, { useCallback, useMemo, useState } from "react";
+import { StyleSheet, View, Text, Pressable, ScrollView, Switch, Alert } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import {
+  Bell,
+  CalendarHeart,
+  Ticket,
+  ChevronRight,
+  HelpCircle,
+  Shield,
+  FileText,
+  LogOut,
+  User,
+} from "lucide-react-native";
+
+import type { RootStackParamList } from "../../navigation/AppNavigator";
+
+const COLORS = {
+  bg: "#F2F2F2",
+  surface: "#FFFFFF",
+  text: "#6B645D",
+  textSoft: "rgba(107,100,93,0.75)",
+  border: "rgba(107,100,93,0.22)",
+  coral: "#FF6969",
+  coralSoft: "rgba(255,105,105,0.12)",
+};
+
+const SPACING = {
+  pageX: 16,
+  bottomPad: 28,
+};
+
+type Nav = NativeStackNavigationProp<RootStackParamList, "Profile">;
+
+type QuickAction = {
+  key: string;
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  onPress?: () => void;
+  disabled?: boolean;
+  comingSoon?: boolean;
+};
+
+type RowItem = {
+  key: string;
+  title: string;
+  subtitle?: string;
+  leftIcon: React.ReactNode;
+  onPress?: () => void;
+  disabled?: boolean;
+  comingSoon?: boolean;
+};
+
+export default function ProfileScreen() {
+  const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
+
+  const showComingSoon = useCallback((title = "Próximamente") => {
+    Alert.alert(title, "Esta función estará disponible en una próxima versión.", [
+      { text: "Entendido", style: "cancel" },
+    ]);
+  }, []);
+
+  // Mock user (backend-ready)
+  const user = useMemo(
+    () => ({
+      fullName: "Usuario",
+      email: "usuario@email.com",
+      roleLabel: "Ciudadano",
+      avatarUrl: null as string | null,
+    }),
+    []
+  );
+
+  // Preferencias MVP (sin persistencia en este sprint; evitamos dependencia extra)
+  // Modo oscuro: deshabilitado porque NO existe sistema de tema global aún.
+  const [darkMode] = useState(false);
+  const [reminders, setReminders] = useState(true);
+
+  const quickActions: QuickAction[] = useMemo(
+    () => [
+      {
+        key: "myevents",
+        title: "Mis eventos",
+        subtitle: "Tus guardados y planes",
+        icon: <CalendarHeart size={18} color={COLORS.text} />,
+        onPress: () => navigation.navigate("MyEvents"),
+      },
+      {
+        key: "notifications",
+        title: "Notificaciones",
+        subtitle: "Recordatorios y novedades",
+        icon: <Bell size={18} color={COLORS.text} />,
+        onPress: () => navigation.navigate("Notifications"),
+      },
+      {
+        key: "tickets",
+        title: "Mis tickets",
+        subtitle: "Próximamente",
+        icon: <Ticket size={18} color={COLORS.textSoft} />,
+        disabled: true,
+        comingSoon: true,
+        onPress: () => showComingSoon("Mis tickets"),
+      },
+    ],
+    [navigation, showComingSoon]
+  );
+
+  const rows: RowItem[] = useMemo(
+    () => [
+      {
+        key: "privacy",
+        title: "Privacidad",
+        subtitle: "Controla tu información",
+        leftIcon: <Shield size={18} color={COLORS.text} />,
+        disabled: true,
+        comingSoon: true,
+        onPress: () => showComingSoon("Privacidad"),
+      },
+      {
+        key: "help",
+        title: "Ayuda",
+        subtitle: "Soporte y preguntas",
+        leftIcon: <HelpCircle size={18} color={COLORS.text} />,
+        disabled: true,
+        comingSoon: true,
+        onPress: () => showComingSoon("Ayuda"),
+      },
+      {
+        key: "terms",
+        title: "Términos y condiciones",
+        subtitle: "Legal",
+        leftIcon: <FileText size={18} color={COLORS.text} />,
+        disabled: true,
+        comingSoon: true,
+        onPress: () => showComingSoon("Términos y condiciones"),
+      },
+    ],
+    [showComingSoon]
+  );
+
+  const contentStyle = useMemo(
+    () => [
+      styles.content,
+      { paddingBottom: insets.bottom + SPACING.bottomPad },
+    ],
+    [insets.bottom]
+  );
+
+  return (
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={contentStyle}>
+        {/* HEADER */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle} accessibilityRole="header">
+            Perfil
+          </Text>
+        </View>
+
+        {/* USER CARD */}
+        <View style={styles.userCard} accessible accessibilityLabel="Información del usuario">
+          <View style={styles.avatar} accessibilityLabel="Avatar del usuario">
+            <User size={22} color={COLORS.text} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name} numberOfLines={1}>
+              {user.fullName}
+            </Text>
+            <Text style={styles.email} numberOfLines={1}>
+              {user.email}
+            </Text>
+
+            <View style={styles.rolePill} accessibilityLabel={`Rol: ${user.roleLabel}`}>
+              <Text style={styles.roleText}>{user.roleLabel}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* QUICK ACTIONS */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            Accesos
+          </Text>
+
+          <View style={styles.quickGrid}>
+            {quickActions.map((item) => {
+              const isDisabled = !!item.disabled;
+              return (
+                <Pressable
+                  key={item.key}
+                  onPress={
+                    isDisabled
+                      ? item.comingSoon
+                        ? item.onPress
+                        : undefined
+                      : item.onPress
+                  }
+                  disabled={isDisabled && !item.comingSoon}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.title}
+                  accessibilityHint={item.subtitle}
+                  accessibilityState={{ disabled: isDisabled }}
+                  style={({ pressed }) => [
+                    styles.quickCard,
+                    isDisabled ? styles.disabled : null,
+                    pressed && !isDisabled ? styles.pressed : null,
+                  ]}
+                >
+                  <View style={styles.quickIcon}>{item.icon}</View>
+                  <Text style={styles.quickTitle}>{item.title}</Text>
+                  <Text style={styles.quickSubtitle}>{item.subtitle}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* PREFERENCES */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            Preferencias
+          </Text>
+
+          <View style={styles.block}>
+            {/* Dark mode (disabled) */}
+            <View style={styles.row}>
+              <View style={styles.rowLeft}>
+                <Text style={styles.rowTitle}>Modo oscuro</Text>
+                <Text style={styles.rowSubtitle}>Próximamente</Text>
+              </View>
+
+              <Switch
+                value={darkMode}
+                onValueChange={() => showComingSoon("Modo oscuro")}
+                disabled
+                accessibilityLabel="Modo oscuro"
+                accessibilityHint="Función próximamente"
+                accessibilityState={{ disabled: true, checked: darkMode }}
+                trackColor={{
+                  false: "rgba(107,100,93,0.18)",
+                  true: COLORS.coralSoft,
+                }}
+                thumbColor={"rgba(107,100,93,0.45)"}
+                ios_backgroundColor="rgba(107,100,93,0.18)"
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Reminders (sí funciona) */}
+            <View style={styles.row}>
+              <View style={styles.rowLeft}>
+                <Text style={styles.rowTitle}>Recordatorios</Text>
+                <Text style={styles.rowSubtitle}>Antes de tus eventos</Text>
+              </View>
+
+              <Switch
+                value={reminders}
+                onValueChange={setReminders}
+                accessibilityLabel="Recordatorios"
+                accessibilityHint="Activa o desactiva recordatorios antes de tus eventos"
+                accessibilityState={{ checked: reminders }}
+                trackColor={{
+                  false: "rgba(107,100,93,0.25)",
+                  true: COLORS.coralSoft,
+                }}
+                thumbColor={reminders ? COLORS.coral : "rgba(107,100,93,0.65)"}
+                ios_backgroundColor="rgba(107,100,93,0.25)"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* SUPPORT / LEGAL */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            Soporte
+          </Text>
+
+          <View style={styles.block}>
+            {rows.map((r, idx) => {
+              const isDisabled = !!r.disabled;
+              return (
+                <View key={r.key}>
+                  <Pressable
+                    onPress={
+                      isDisabled
+                        ? r.comingSoon
+                          ? r.onPress
+                          : undefined
+                        : r.onPress
+                    }
+                    disabled={isDisabled && !r.comingSoon}
+                    accessibilityRole="button"
+                    accessibilityLabel={r.title}
+                    accessibilityHint={r.subtitle ?? ""}
+                    accessibilityState={{ disabled: isDisabled }}
+                    style={({ pressed }) => [
+                      styles.navRow,
+                      isDisabled ? styles.disabled : null,
+                      pressed && !isDisabled ? styles.pressedRow : null,
+                    ]}
+                  >
+                    <View style={styles.navLeft}>
+                      <View style={styles.navIcon}>{r.leftIcon}</View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.navTitle}>{r.title}</Text>
+                        {r.subtitle ? (
+                          <Text style={styles.navSubtitle}>{r.subtitle}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    {/* Si está disabled, el chevron se atenúa para no “prometer navegación” */}
+                    <ChevronRight
+                      size={18}
+                      color={isDisabled ? "rgba(107,100,93,0.35)" : COLORS.textSoft}
+                    />
+                  </Pressable>
+
+                  {idx !== rows.length - 1 ? <View style={styles.divider} /> : null}
+                </View>
+              );
+            })}
+          </View>
+
+          <Text style={styles.versionText}>Versión 0.1 • MVP</Text>
+        </View>
+
+        {/* LOGOUT */}
+        <View style={styles.section}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar sesión"
+            accessibilityHint="Función próximamente"
+            onPress={() => showComingSoon("Cerrar sesión")}
+            style={({ pressed }) => [
+              styles.logoutBtn,
+              pressed ? styles.logoutPressed : null,
+            ]}
+          >
+            <LogOut size={18} color={COLORS.text} />
+            <Text style={styles.logoutText}>Cerrar sesión</Text>
+            <Text style={styles.logoutHint}>Próximamente</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  content: { paddingHorizontal: SPACING.pageX },
+
+  header: { paddingTop: 10, paddingBottom: 14 },
+  headerTitle: {
+    color: COLORS.text,
+    fontSize: 22,
+    fontWeight: "900",
+    letterSpacing: 0.2,
+  },
+
+  userCard: {
+    flexDirection: "row",
+    gap: 14,
+    padding: 16,
+    borderRadius: 24,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "rgba(107,100,93,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(107,100,93,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  name: { color: COLORS.text, fontSize: 16, fontWeight: "900" },
+  email: { color: COLORS.textSoft, fontSize: 13, fontWeight: "700", marginTop: 2 },
+  rolePill: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(107,100,93,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(107,100,93,0.14)",
+  },
+  roleText: { color: COLORS.text, fontSize: 12, fontWeight: "800" },
+
+  section: { marginTop: 18 },
+  sectionTitle: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 0.2,
+    marginBottom: 10,
+  },
+
+  quickGrid: { flexDirection: "row", gap: 10 },
+  quickCard: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  quickIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: "rgba(107,100,93,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(107,100,93,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  quickTitle: { color: COLORS.text, fontSize: 13, fontWeight: "900" },
+  quickSubtitle: { color: COLORS.textSoft, fontSize: 12, fontWeight: "700", marginTop: 4 },
+
+  block: {
+    borderRadius: 22,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: "hidden",
+  },
+  row: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  rowLeft: { flex: 1, paddingRight: 12 },
+  rowTitle: { color: COLORS.text, fontSize: 13, fontWeight: "900" },
+  rowSubtitle: { color: COLORS.textSoft, fontSize: 12, fontWeight: "700", marginTop: 2 },
+
+  divider: { height: 1, backgroundColor: "rgba(107,100,93,0.14)" },
+
+  navRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  navLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  navIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: "rgba(107,100,93,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(107,100,93,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  navTitle: { color: COLORS.text, fontSize: 13, fontWeight: "900" },
+  navSubtitle: { color: COLORS.textSoft, fontSize: 12, fontWeight: "700", marginTop: 2 },
+
+  versionText: { marginTop: 10, color: COLORS.textSoft, fontSize: 12, fontWeight: "700" },
+
+  logoutBtn: {
+    height: 54,
+    borderRadius: 999,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  logoutPressed: {
+    borderColor: "rgba(255,105,105,0.55)",
+    backgroundColor: COLORS.coralSoft,
+    opacity: 0.98,
+  },
+  logoutText: { color: COLORS.text, fontSize: 13, fontWeight: "900" },
+  logoutHint: { marginLeft: "auto", color: COLORS.textSoft, fontSize: 12, fontWeight: "800" },
+
+  pressed: {
+    borderColor: "rgba(255,105,105,0.55)",
+    backgroundColor: COLORS.coralSoft,
+    opacity: 0.98,
+  },
+  pressedRow: { backgroundColor: "rgba(255,105,105,0.06)" },
+
+  disabled: { opacity: 0.55 },
+});
