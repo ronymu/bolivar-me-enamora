@@ -1,3 +1,4 @@
+// src/navigation/AppNavigator.tsx
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -7,15 +8,7 @@ import EventDetailScreen from "../screens/citizen/EventDetailScreen";
 import ProfileScreen from "../screens/citizen/ProfileScreen";
 import NotificationsScreen from "../screens/citizen/NotificationsScreen";
 
-export type RootStackParamList = {
-  Discover: undefined;
-  MyEvents: undefined;
-  EventDetail: { eventId: string };
-
-  // Sprint 3
-  Profile: undefined;
-  Notifications: undefined;
-};
+import type { RootStackParamList } from "./navTypes";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -25,8 +18,6 @@ export default function AppNavigator() {
       <Stack.Screen name="Discover" component={DiscoverScreen} />
       <Stack.Screen name="MyEvents" component={MyEventsScreen} />
       <Stack.Screen name="EventDetail" component={EventDetailScreen} />
-
-      {/* Sprint 3 */}
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
     </Stack.Navigator>

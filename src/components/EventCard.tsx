@@ -1,3 +1,4 @@
+// src/components/EventCard.tsx
 import React from "react";
 import {
   View,
@@ -11,13 +12,15 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { RootNav } from "../navigation/navTypes";
+import type { MediaSource } from "../types/domain";
 
 type Props = {
   title: string;
   description: string;
-  image: any;
+  image: MediaSource;
   chips: string[];
-  eventId?: string;
+  eventId: string; // ✅ ahora es obligatorio
 };
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
@@ -33,16 +36,23 @@ export default function EventCard({
   chips,
   eventId,
 }: Props) {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<RootNav<"Discover">>();
   const insets = useSafeAreaInsets();
 
   const contentPaddingBottom =
     BASE_PADDING + insets.bottom + FOOTER_RESERVED_SPACE;
 
+  const goToDetail = () => {
+    navigation.navigate("EventDetail", { eventId });
+  };
+
   return (
     <Pressable
       style={styles.container}
-      onPress={() => eventId && navigation.navigate("EventDetail", { eventId })}
+      onPress={goToDetail}
+      accessibilityRole="button"
+      accessibilityLabel={`Ver detalle del evento: ${title}`}
+      accessibilityHint="Abre la pantalla con la información completa del evento"
       android_ripple={{ color: "rgba(255,255,255,0.06)" }}
       renderToHardwareTextureAndroid
       shouldRasterizeIOS
@@ -89,9 +99,10 @@ export default function EventCard({
           {description}
         </Text>
 
+        {/* ✅ Chips debajo de la descripción (como estaba antes) */}
         <View style={styles.chips}>
           {chips.map((chip) => (
-            <View key={chip} style={styles.chip}>
+            <View key={`${eventId}-${chip}`} style={styles.chip}>
               <Text style={styles.chipText} numberOfLines={1}>
                 {chip}
               </Text>
@@ -129,7 +140,6 @@ const styles = StyleSheet.create({
   },
 
   // Grain sin imagen: micro-contraste con muy baja opacidad.
-  // Si quieres aún mejor, te paso una textura noise.png para usar con Image.
   grain: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(255,255,255,0.02)",

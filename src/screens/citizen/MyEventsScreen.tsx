@@ -1,141 +1,135 @@
 // src/screens/citizen/MyEventsScreen.tsx
 import React, { useMemo } from "react";
-import { StyleSheet, View, Text, Pressable, FlatList, Image } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { StyleSheet, View, Text, FlatList, Pressable, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, Heart } from "lucide-react-native";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
-import { eventsMock } from "../../mock/events";
 import { useFavorites } from "../../context/FavoritesContext";
-import type { RootStackParamList } from "../../navigation/AppNavigator";
+import { useEvents } from "../../context/EventsContext";
+import type { RootScreenProps } from "../../navigation/navTypes";
+import type { Event } from "../../types/domain";
+
+type Props = RootScreenProps<"MyEvents">;
 
 const COLORS = {
   bg: "#F2F2F2",
-  text: "#6B645D",
-  textSoft: "rgba(107,100,93,0.7)",
   surface: "#FFFFFF",
-  border: "rgba(107,100,93,0.22)",
+  text: "#6B645D",
+  textSoft: "rgba(107,100,93,0.75)",
+  border: "rgba(107,100,93,0.18)",
   coral: "#FF6969",
 };
 
-type Nav = NativeStackNavigationProp<RootStackParamList, "MyEvents">;
+export default function MyEventsScreen({ navigation }: Props) {
+  const { favoriteIds, removeFavorite, isFavorite } = useFavorites();
+  const { events, isLoading } = useEvents();
 
-export default function MyEventsScreen() {
-  const navigation = useNavigation<Nav>();
-  const insets = useSafeAreaInsets();
-  const { favoriteIds, removeFavorite, addFavorite, isFavorite } = useFavorites();
-
-  const events = useMemo(
-    () => eventsMock.filter((e) => favoriteIds.includes(e.id)),
-    [favoriteIds]
+  const favorites = useMemo<Event[]>(
+    () => events.filter((e) => favoriteIds.includes(e.id)),
+    [events, favoriteIds]
   );
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <Pressable
+          onPress={navigation.goBack}
+          style={styles.backBtn}
+          hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="Volver"
-          accessibilityHint="Regresa a la pantalla anterior"
-          onPress={navigation.goBack}
-          hitSlop={10}
-          style={({ pressed }) => [styles.backBtn, pressed ? styles.backBtnPressed : null]}
         >
           <ArrowLeft size={22} color={COLORS.text} />
         </Pressable>
 
-        <Text style={styles.headerTitle}>Mis eventos</Text>
+        <Text style={styles.title} accessibilityRole="header">
+          Mis eventos
+        </Text>
 
-        <View style={{ width: 44, height: 44 }} />
+        {/* placeholder para centrar título */}
+        <View style={{ width: 44 }} />
       </View>
 
-      <FlatList
-        data={events}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingBottom: insets.bottom + 24,
-          paddingTop: 4,
-          flexGrow: events.length === 0 ? 1 : 0,
-        }}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        initialNumToRender={6}
-        windowSize={7}
-        removeClippedSubviews
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>Aún no tienes favoritos</Text>
-            <Text style={styles.emptyText}>
-              Guarda eventos desde Discover y aparecerán aquí para volver cuando quieras.
-            </Text>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const liked = isFavorite(item.id);
+      {/* Content */}
+      {isLoading ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyText}>Cargando…</Text>
+        </View>
+      ) : favorites.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyTitle}>Aún no tienes eventos guardados</Text>
+          <Text style={styles.emptyText}>
+            Haz swipe a la derecha en Discover para guardar tus favoritos.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={favorites}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => {
+            const liked = isFavorite(item.id);
 
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Abrir detalle de ${item.title}`}
-              accessibilityHint="Abre la información completa del evento"
-              onPress={() => navigation.navigate("EventDetail", { eventId: item.id })}
-              style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
-            >
-              <View style={styles.imageWrap}>
-                <Image
-                  source={item.image}
-                  style={styles.image}
-                  resizeMode="cover"
-                  fadeDuration={150}
-                  resizeMethod="resize"
-                />
-
-                {/* Botón favorito dentro de la imagen (esquina superior derecha) */}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={liked ? "Quitar de favoritos" : "Guardar en favoritos"}
-                  accessibilityHint="Marca o desmarca este evento"
-                  onPress={(e) => {
-                    // Evita que también navegue al detalle
-                    e.stopPropagation();
-                    liked ? removeFavorite(item.id) : addFavorite(item.id);
-                  }}
-                  hitSlop={10}
-                  style={({ pressed }) => [
-                    styles.likeBtn,
-                    pressed ? styles.likeBtnPressed : null,
-                  ]}
-                >
-                  <Heart
-                    size={20}
-                    color={liked ? COLORS.coral : "white"}
-                    fill={liked ? COLORS.coral : "transparent"}
+            return (
+              <Pressable
+                style={styles.card}
+                onPress={() => navigation.navigate("EventDetail", { eventId: item.id })}
+                accessibilityRole="button"
+                accessibilityLabel={`Abrir detalle de ${item.title}`}
+              >
+                {/* Imagen */}
+                <View style={styles.imageWrap}>
+                  <Image
+                    source={item.image}
+                    style={styles.image}
+                    resizeMode="cover"
+                    fadeDuration={0}
                   />
-                </Pressable>
-              </View>
+                </View>
 
-              <View style={styles.cardContent}>
-                <Text style={styles.title} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <Text style={styles.desc} numberOfLines={2}>
-                  {item.description}
-                </Text>
+                {/* Texto */}
+                <View style={styles.content}>
+                  <View style={styles.rowTop}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
 
-                <View style={styles.metaRow}>
-                  <Text style={styles.metaText}>{item.dateLabel}</Text>
-                  <Text style={styles.metaDot}>•</Text>
-                  <Text style={styles.metaText} numberOfLines={1}>
-                    {item.location}
+                    {/* Corazón para quitar de favoritos */}
+                    <Pressable
+                      onPress={(e) => {
+                        // Evita que se dispare el onPress de la tarjeta
+                        e.stopPropagation?.();
+                        removeFavorite(item.id);
+                      }}
+                      hitSlop={10}
+                      style={styles.heartBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={liked ? "Quitar de favoritos" : "Guardar en favoritos"}
+                      accessibilityState={{ selected: liked }}
+                    >
+                      <Heart
+                        size={18}
+                        color={liked ? COLORS.coral : COLORS.textSoft}
+                        fill={liked ? COLORS.coral : "transparent"}
+                      />
+                    </Pressable>
+                  </View>
+
+                  <Text style={styles.meta} numberOfLines={1}>
+                    {item.dateLabel} • {item.locationLabel}
+                  </Text>
+
+                  <Text style={styles.desc} numberOfLines={2}>
+                    {item.description}
                   </Text>
                 </View>
-              </View>
-            </Pressable>
-          );
-        }}
-      />
+              </Pressable>
+            );
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -144,17 +138,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
 
   header: {
+    height: 56,
+    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: COLORS.text,
   },
 
   backBtn: {
@@ -163,68 +151,77 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-  },
-  backBtnPressed: {
-    backgroundColor: "rgba(107,100,93,0.06)",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: "rgba(107,100,93,0.22)",
   },
 
-  separator: { height: 14 },
+  title: { fontSize: 18, fontWeight: "900", color: COLORS.text },
+
+  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
+  emptyTitle: { fontSize: 16, fontWeight: "900", color: COLORS.text, textAlign: "center" },
+  emptyText: { marginTop: 8, color: COLORS.textSoft, fontWeight: "700", textAlign: "center" },
 
   card: {
     backgroundColor: COLORS.surface,
-    borderRadius: 24,
-    overflow: "hidden",
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: COLORS.border,
-  },
-  cardPressed: {
-    borderColor: "rgba(107,100,93,0.35)",
-    backgroundColor: "rgba(107,100,93,0.02)",
+    marginBottom: 12,
+    overflow: "hidden",
   },
 
-  imageWrap: { position: "relative" },
-  image: { height: 170, width: "100%" },
+  imageWrap: {
+    height: 150,
+    width: "100%",
+    backgroundColor: "rgba(0,0,0,0.06)",
+  },
+  image: {
+    height: "100%",
+    width: "100%",
+  },
 
-  likeBtn: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.28)",
+  content: {
+    padding: 14,
+  },
+
+  rowTop: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-  },
-  likeBtnPressed: {
-    backgroundColor: "rgba(0,0,0,0.38)",
+    justifyContent: "space-between",
+    gap: 10,
   },
 
-  cardContent: { padding: 16 },
-  title: { fontSize: 16, fontWeight: "800", color: COLORS.text },
-  desc: { fontSize: 13, color: COLORS.textSoft, marginTop: 6, lineHeight: 18 },
-
-  metaRow: { flexDirection: "row", alignItems: "center", marginTop: 10, flexWrap: "wrap" },
-  metaText: { fontSize: 12, fontWeight: "700", color: COLORS.textSoft },
-  metaDot: { marginHorizontal: 8, color: COLORS.textSoft },
-
-  emptyWrap: {
+  cardTitle: {
     flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-  },
-  emptyTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "900",
     color: COLORS.text,
-    textAlign: "center",
-    marginBottom: 8,
   },
-  emptyText: {
+
+  heartBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(107,100,93,0.18)",
+    backgroundColor: "rgba(255,255,255,0.9)",
+  },
+
+  meta: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textSoft,
+  },
+
+  desc: {
+    marginTop: 8,
     fontSize: 13,
     lineHeight: 18,
+    fontWeight: "700",
     color: COLORS.textSoft,
-    textAlign: "center",
   },
 });

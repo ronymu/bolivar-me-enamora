@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useMemo } from "react";
+import { usePersistedState } from "../hooks/usePersistedState";
 
 type FavoritesContextValue = {
   favoriteIds: string[];
@@ -11,10 +12,14 @@ type FavoritesContextValue = {
 const FavoritesContext = createContext<FavoritesContextValue | null>(null);
 
 export function FavoritesProvider({ children }: { children: React.ReactNode }) {
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  // Persistencia MVP: mantiene favoritos al cerrar / abrir la app.
+  const { value: favoriteIds, setValue: setFavoriteIds } =
+    usePersistedState<string[]>("favorites:eventIds", []);
 
   const addFavorite = (eventId: string) => {
-    setFavoriteIds((prev) => (prev.includes(eventId) ? prev : [eventId, ...prev]));
+    setFavoriteIds((prev) =>
+      prev.includes(eventId) ? prev : [eventId, ...prev]
+    );
   };
 
   const removeFavorite = (eventId: string) => {
@@ -30,7 +35,11 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     [favoriteIds]
   );
 
-  return <FavoritesContext.Provider value={value}>{children}</FavoritesContext.Provider>;
+  return (
+    <FavoritesContext.Provider value={value}>
+      {children}
+    </FavoritesContext.Provider>
+  );
 }
 
 export function useFavorites() {

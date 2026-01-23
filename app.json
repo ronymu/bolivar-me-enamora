@@ -25,6 +25,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": ["expo-asset"],
+    "extra": {
+      "EVENTS_SOURCE": "mock",
+      "SUPABASE_URL": "",
+      "SUPABASE_ANON_KEY": "",
+      "API_BASE_URL": ""
     }
   }
 }

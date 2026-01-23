@@ -1,41 +1,90 @@
+// src/components/SwipeFooter.tsx
 import React from "react";
-import { View, Pressable, StyleSheet } from "react-native";
-import { X, Heart } from "lucide-react-native";
+import { StyleSheet, View, Pressable } from "react-native";
+import { X, Heart, RotateCcw } from "lucide-react-native";
+
+const COLORS = {
+  ring: "rgba(255,255,255,0.16)",
+  surface: "rgba(0,0,0,0.22)",
+  white: "#FFFFFF",
+  coral: "#FF6969",
+};
 
 type Props = {
   onNope: () => void;
   onLike: () => void;
+  onUndo: () => void;
+  canUndo: boolean;
 };
 
-export default function SwipeFooter({ onNope, onLike }: Props) {
+export default function SwipeFooter({ onNope, onLike, onUndo, canUndo }: Props) {
   return (
-    <View style={styles.container}>
-      <Pressable onPress={onNope} style={styles.button}>
-        <X size={28} color="white" />
+    <View style={styles.wrap} pointerEvents="box-none" accessibilityRole="none">
+      <Pressable
+        onPress={onUndo}
+        disabled={!canUndo}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Deshacer"
+        accessibilityHint="Vuelve al evento anterior"
+        accessibilityState={{ disabled: !canUndo }}
+        style={({ pressed }) => [
+          styles.btn,
+          !canUndo ? styles.btnDisabled : null,
+          pressed && canUndo ? styles.pressed : null,
+        ]}
+      >
+        <RotateCcw size={20} color={COLORS.white} />
       </Pressable>
 
-      <View style={styles.separator} />
+      <Pressable
+        onPress={onNope}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Descartar"
+        accessibilityHint="Descarta este evento"
+        style={({ pressed }) => [styles.btn, pressed ? styles.pressed : null]}
+      >
+        <X size={22} color={COLORS.white} />
+      </Pressable>
 
-      <Pressable onPress={onLike} style={styles.button}>
-        <Heart size={28} color="#FF5A5F" />
+      <Pressable
+        onPress={onLike}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Guardar"
+        accessibilityHint="Guarda este evento en favoritos"
+        style={({ pressed }) => [styles.btn, pressed ? styles.pressed : null]}
+      >
+        <Heart size={22} color={COLORS.coral} fill={COLORS.coral} />
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrap: {
     flexDirection: "row",
+    gap: 14,
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 10,
   },
-  button: {
-    padding: 16,
+  btn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.ring,
   },
-  separator: {
-    width: 1,
-    height: 28,
-    backgroundColor: "rgba(255,255,255,0.25)",
-    marginHorizontal: 12,
+  btnDisabled: {
+    opacity: 0.45,
+  },
+  pressed: {
+    transform: [{ scale: 0.995 }],
+    opacity: 0.96,
   },
 });
