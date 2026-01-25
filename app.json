@@ -28,9 +28,9 @@
     },
     "plugins": ["expo-asset"],
     "extra": {
-      "EVENTS_SOURCE": "mock",
-      "SUPABASE_URL": "",
-      "SUPABASE_ANON_KEY": "",
+      "EVENTS_SOURCE": "api",
+      "SUPABASE_URL": "https://lojdyijqbyyhopmggjqc.supabase.co",
+      "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxvamR5aWpxYnl5aG9wbWdnanFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxODMzMTMsImV4cCI6MjA4NDc1OTMxM30.YMOdFpDASOyeI9NNR6TLCsUwUEin4xRXjHHK_YyfOQg",
       "API_BASE_URL": ""
     }
   }

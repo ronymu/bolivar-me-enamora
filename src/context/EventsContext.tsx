@@ -1,5 +1,13 @@
 // src/context/EventsContext.tsx
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import type { Event, ID } from "../types/domain";
 import type { EventsRepo } from "../data/events/eventsRepo";
 import { mockEventsRepo } from "../data/events/mockEventsRepo";
@@ -10,7 +18,6 @@ type EventsState = {
   events: Event[];
   isLoading: boolean;
   error: string | null;
-
   refresh: () => Promise<void>;
   getById: (id: ID) => Event | undefined;
 };
@@ -30,7 +37,21 @@ type Props = {
 function pickRepo(): EventsRepo {
   const cfg = getAppConfig();
 
-  if (cfg.eventsSource === "api") return apiEventsRepo;
+  // ✅ Logs diagnósticos (temporal)
+  console.log("[CONFIG]", {
+    eventsSource: cfg.eventsSource,
+    hasUrl: !!cfg.supabaseUrl,
+    hasAnonKey: !!cfg.supabaseAnonKey,
+    urlPreview: cfg.supabaseUrl ? String(cfg.supabaseUrl).slice(0, 28) + "…" : null,
+    keyPreview: cfg.supabaseAnonKey ? String(cfg.supabaseAnonKey).slice(0, 12) + "…" : null,
+  });
+
+  if (cfg.eventsSource === "api") {
+    console.log("[EVENTS] using apiEventsRepo");
+    return apiEventsRepo;
+  }
+
+  console.log("[EVENTS] using mockEventsRepo");
   return mockEventsRepo;
 }
 
@@ -46,9 +67,12 @@ export function EventsProvider({ children, repoOverride }: Props) {
     setError(null);
 
     try {
+      console.log("[EVENTS] refresh() start");
       const data = await repo.listEvents();
-      setEvents(data);
+      console.log("[EVENTS] loaded:", Array.isArray(data) ? data.length : "not-array");
+      setEvents(Array.isArray(data) ? data : []);
     } catch (e: any) {
+      console.log("[EVENTS] error:", e);
       setError(e?.message ?? "No se pudieron cargar los eventos.");
     } finally {
       setIsLoading(false);
