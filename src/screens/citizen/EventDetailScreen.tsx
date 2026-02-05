@@ -14,6 +14,7 @@ import {
   Linking,
   ScrollView,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -41,7 +42,7 @@ type Props = RootScreenProps<"EventDetail">;
 
 function openMaps(address?: string, lat?: number, lng?: number) {
   let url = "https://www.google.com/maps/search/?api=1";
-  if (lat && lng) url += `&query=${lat},${lng}`;
+  if (lat != null && lng != null) url += `&query=${lat},${lng}`;
   else if (address) url += `&query=${encodeURIComponent(address)}`;
   Linking.openURL(url).catch(() => {});
 }
@@ -50,8 +51,29 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { eventId } = route.params;
 
-  const { getById } = useEvents();
+  // OJO: esto asume que YA tienes hydrateById implementado en EventsContext.
+  // Si no lo tienes, dímelo y te paso el EventsContext completo.
+  const { getById, hydrateById, isLoading: isListLoading } = useEvents();
+  const [isHydrating, setIsHydrating] = useState(false);
+
   const event = useMemo(() => getById(eventId), [getById, eventId]);
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      setIsHydrating(true);
+      try {
+        await hydrateById(eventId);
+      } finally {
+        if (alive) setIsHydrating(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [eventId, hydrateById]);
 
   const { addFavorite, removeFavorite, isFavorite } = useFavorites();
   const liked = event ? isFavorite(event.id) : false;
@@ -68,6 +90,15 @@ export default function EventDetailScreen({ navigation, route }: Props) {
     ]).start();
   }, [fade, slide]);
 
+  if (!event && (isListLoading || isHydrating)) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator />
+        <Text style={[styles.errorText, { marginTop: 10 }]}>Cargando evento…</Text>
+      </View>
+    );
+  }
+
   if (!event) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -78,10 +109,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
           onPress={navigation.goBack}
           accessibilityRole="button"
           accessibilityLabel="Volver"
-          style={({ pressed }) => [
-            styles.errorBtn,
-            pressed ? styles.errorBtnPressed : null,
-          ]}
+          style={({ pressed }) => [styles.errorBtn, pressed ? styles.errorBtnPressed : null]}
         >
           <Text style={styles.errorBtnText}>Volver</Text>
         </Pressable>
@@ -99,6 +127,10 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   const address = getMapAddress(event);
   const { latitude: lat, longitude: lng } = getMapCoords(event);
   const images = useMemo(() => getEventImages(event), [event]);
+
+  if (__DEV__) {
+    console.log("[UI] organizer resolved:", organizer);
+  }
 
   return (
     <View style={styles.container}>
@@ -132,40 +164,22 @@ export default function EventDetailScreen({ navigation, route }: Props) {
           {images.length > 1 && (
             <View pointerEvents="none" style={[styles.dotsRow, { bottom: OVERLAP + 18 }]}>
               {images.map((_, i) => (
-                <View
-                  key={`${event.id}-dot-${i}`}
-                  style={[styles.dot, i === index ? styles.dotActive : null]}
-                />
+                <View key={`${event.id}-dot-${i}`} style={[styles.dot, i === index ? styles.dotActive : null]} />
               ))}
             </View>
           )}
 
           <View style={[styles.header, { top: insets.top + 10 }]}>
-            <Pressable
-              style={styles.iconBtn}
-              onPress={navigation.goBack}
-              accessibilityRole="button"
-              accessibilityLabel="Volver"
-              accessibilityHint="Regresa a la pantalla anterior"
-              hitSlop={10}
-            >
+            <Pressable style={styles.iconBtn} onPress={navigation.goBack} hitSlop={10}>
               <ArrowLeft size={22} color="white" />
             </Pressable>
 
             <Pressable
               style={styles.iconBtn}
               onPress={() => (liked ? removeFavorite(event.id) : addFavorite(event.id))}
-              accessibilityRole="button"
-              accessibilityLabel={liked ? "Quitar de favoritos" : "Guardar en favoritos"}
-              accessibilityHint="Guarda este evento para verlo en Mis eventos"
-              accessibilityState={{ selected: liked }}
               hitSlop={10}
             >
-              <Heart
-                size={22}
-                color={liked ? COLORS.coral : "white"}
-                fill={liked ? COLORS.coral : "transparent"}
-              />
+              <Heart size={22} color={liked ? COLORS.coral : "white"} fill={liked ? COLORS.coral : "transparent"} />
             </Pressable>
           </View>
         </View>
@@ -174,11 +188,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
         <Animated.View
           style={[
             styles.cardWrap,
-            {
-              marginTop: -OVERLAP,
-              opacity: fade,
-              transform: [{ translateY: slide }],
-            },
+            { marginTop: -OVERLAP, opacity: fade, transform: [{ translateY: slide }] },
           ]}
         >
           <View style={styles.card}>
@@ -186,11 +196,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
               {event.title}
             </Text>
 
-            <View
-              style={styles.meta}
-              accessibilityRole="text"
-              accessibilityLabel={`${event.dateLabel}. ${event.locationLabel}.`}
-            >
+            <View style={styles.meta}>
               <Text style={styles.metaText}>{event.dateLabel}</Text>
               <Text style={styles.metaDot}>•</Text>
               <Text style={styles.metaText}>{event.locationLabel}</Text>
@@ -198,13 +204,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
 
             <Text style={styles.description}>{event.fullDescription}</Text>
 
-            <Pressable
-              style={styles.cta}
-              onPress={() => {}}
-              accessibilityRole="button"
-              accessibilityLabel="Comprar entrada"
-              accessibilityHint="Función próximamente"
-            >
+            <Pressable style={styles.cta} onPress={() => {}}>
               <Text style={styles.ctaText}>Comprar entrada</Text>
             </Pressable>
 
@@ -216,6 +216,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                 <User2 size={18} color={COLORS.text} />
                 <Text style={styles.blockTitle}>Gestor</Text>
               </View>
+
               <Text style={styles.blockPrimary}>{organizer.name}</Text>
               {organizer.organization ? (
                 <Text style={styles.blockSecondary}>{organizer.organization}</Text>
@@ -231,14 +232,14 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                 <Text style={styles.blockTitle}>Cómo llegar</Text>
               </View>
 
-              <Text style={styles.blockSecondary}>{address}</Text>
+              {/* ✅ FIX: dirección larga ya no se sale */}
+              <Text style={styles.addressText}>{address}</Text>
 
               <Pressable
                 style={styles.mapBtn}
                 onPress={() => openMaps(address, lat, lng)}
                 accessibilityRole="button"
                 accessibilityLabel="Abrir en Maps"
-                accessibilityHint="Abre la ubicación del evento en tu aplicación de mapas"
               >
                 <ExternalLink size={14} color={COLORS.text} />
                 <Text style={styles.mapBtnText}>Abrir en Maps</Text>
@@ -301,12 +302,7 @@ const styles = StyleSheet.create({
     gap: 7,
     zIndex: 10,
   },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.40)",
-  },
+  dot: { width: 7, height: 7, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.40)" },
   dotActive: { width: 18, backgroundColor: "rgba(255,255,255,0.92)" },
 
   cardWrap: { paddingHorizontal: 16 },
@@ -320,15 +316,10 @@ const styles = StyleSheet.create({
 
   title: { fontSize: 24, fontWeight: "800", color: COLORS.text },
   meta: { flexDirection: "row", marginVertical: 12 },
-  metaText: { color: COLORS.textSoft, fontWeight: "700" },
+  metaText: { color: COLORS.textSoft, fontWeight: "700", flexShrink: 1 },
   metaDot: { marginHorizontal: 8, color: COLORS.textSoft },
 
-  description: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: COLORS.textSoft,
-    marginBottom: 20,
-  },
+  description: { fontSize: 14, lineHeight: 20, color: COLORS.textSoft, marginBottom: 20 },
 
   cta: {
     height: 50,
@@ -348,6 +339,15 @@ const styles = StyleSheet.create({
   blockTitle: { fontSize: 14, fontWeight: "800", color: COLORS.text },
   blockPrimary: { fontSize: 14, fontWeight: "800", color: COLORS.text },
   blockSecondary: { fontSize: 13, color: COLORS.textSoft },
+
+  // ✅ FIX: envoltura y shrink para direcciones largas
+  addressText: {
+    fontSize: 13,
+    color: COLORS.textSoft,
+    flexWrap: "wrap",
+    flexShrink: 1,
+    maxWidth: "100%",
+  },
 
   mapBtn: {
     marginTop: 8,

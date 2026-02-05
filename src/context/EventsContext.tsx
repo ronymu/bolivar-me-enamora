@@ -20,38 +20,26 @@ type EventsState = {
   error: string | null;
   refresh: () => Promise<void>;
   getById: (id: ID) => Event | undefined;
+
+  /**
+   * ✅ Hidrata un evento desde backend (Detail)
+   * - Hace getEventById en repo (puede traer organizer join)
+   * - Lo guarda/actualiza en el cache local (events[])
+   */
+  hydrateById: (id: ID) => Promise<Event | null>;
 };
 
 const EventsContext = createContext<EventsState | null>(null);
 
 type Props = {
   children: React.ReactNode;
-
-  /**
-   * Override manual (tests / experiments).
-   * Normalmente NO lo uses: usa EVENTS_SOURCE en app.json
-   */
   repoOverride?: EventsRepo;
 };
 
 function pickRepo(): EventsRepo {
   const cfg = getAppConfig();
 
-  // ✅ Logs diagnósticos (temporal)
-  console.log("[CONFIG]", {
-    eventsSource: cfg.eventsSource,
-    hasUrl: !!cfg.supabaseUrl,
-    hasAnonKey: !!cfg.supabaseAnonKey,
-    urlPreview: cfg.supabaseUrl ? String(cfg.supabaseUrl).slice(0, 28) + "…" : null,
-    keyPreview: cfg.supabaseAnonKey ? String(cfg.supabaseAnonKey).slice(0, 12) + "…" : null,
-  });
-
-  if (cfg.eventsSource === "api") {
-    console.log("[EVENTS] using apiEventsRepo");
-    return apiEventsRepo;
-  }
-
-  console.log("[EVENTS] using mockEventsRepo");
+  if (cfg.eventsSource === "api") return apiEventsRepo;
   return mockEventsRepo;
 }
 
@@ -67,13 +55,11 @@ export function EventsProvider({ children, repoOverride }: Props) {
     setError(null);
 
     try {
-      console.log("[EVENTS] refresh() start");
       const data = await repo.listEvents();
-      console.log("[EVENTS] loaded:", Array.isArray(data) ? data.length : "not-array");
       setEvents(Array.isArray(data) ? data : []);
     } catch (e: any) {
-      console.log("[EVENTS] error:", e);
       setError(e?.message ?? "No se pudieron cargar los eventos.");
+      setEvents([]);
     } finally {
       setIsLoading(false);
     }
@@ -88,9 +74,35 @@ export function EventsProvider({ children, repoOverride }: Props) {
     [events]
   );
 
+  const hydrateById = useCallback(
+    async (id: ID) => {
+      try {
+        const full = await repo.getEventById(id);
+        if (!full) return null;
+
+        setEvents((prev) => {
+          const idx = prev.findIndex((e) => e.id === id);
+          if (idx === -1) return [full, ...prev];
+
+          // ✅ Merge suave: lo “full” gana, pero no pierdes nada raro que ya estuviera.
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...full };
+          return next;
+        });
+
+        return full;
+      } catch (e) {
+        // No rompemos UX del detalle si falla; solo devolvemos null.
+        console.warn("[EventsContext] hydrateById failed:", e);
+        return null;
+      }
+    },
+    [repo]
+  );
+
   const value = useMemo(
-    () => ({ events, isLoading, error, refresh, getById }),
-    [events, isLoading, error, refresh, getById]
+    () => ({ events, isLoading, error, refresh, getById, hydrateById }),
+    [events, isLoading, error, refresh, getById, hydrateById]
   );
 
   return <EventsContext.Provider value={value}>{children}</EventsContext.Provider>;
