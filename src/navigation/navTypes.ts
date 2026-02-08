@@ -2,9 +2,12 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 export type RootStackParamList = {
+  // Auth
   Login: undefined;
   Signup: undefined;
+  ForgotPassword: undefined;
 
+  // App
   Discover: undefined;
   EventDetail: { eventId: string };
   MyEvents: undefined;

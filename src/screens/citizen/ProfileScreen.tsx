@@ -1,5 +1,5 @@
 // src/screens/citizen/ProfileScreen.tsx
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   Switch,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -24,6 +25,7 @@ import {
 
 import type { RootScreenProps } from "../../navigation/navTypes";
 import { useNotificationPrefs } from "../../hooks/useNotificationPrefs";
+import { useAuth } from "../../context/AuthContext";
 
 const COLORS = {
   bg: "#F2F2F2",
@@ -59,15 +61,18 @@ export default function ProfileScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { remindersEnabled, setRemindersEnabled } = useNotificationPrefs();
 
-  // ✅ Mock user (backend-ready: luego se llena desde Auth/Supabase)
+  const { user: authUser, signOut } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const user = useMemo(
     () => ({
-      fullName: "Usuario",
-      email: "usuario@email.com",
+      fullName: "Usuario", // luego lo llenamos desde profiles
+      email: authUser?.email ?? "Sin email",
       roleLabel: "Ciudadano",
       avatarUrl: null as string | null,
+      hasSession: !!authUser,
     }),
-    []
+    [authUser]
   );
 
   const showComingSoon = () => {
@@ -133,6 +138,14 @@ export default function ProfileScreen({ navigation }: Props) {
   );
 
   const handleLogout = () => {
+    // Si por alguna razón no hay sesión, no mostramos logout
+    if (!user.hasSession) {
+      Alert.alert("Sin sesión", "No hay un usuario activo para cerrar sesión.", [
+        { text: "OK" },
+      ]);
+      return;
+    }
+
     Alert.alert(
       "Cerrar sesión",
       "¿Seguro que quieres salir?",
@@ -141,8 +154,21 @@ export default function ProfileScreen({ navigation }: Props) {
         {
           text: "Salir",
           style: "destructive",
-          onPress: () =>
-            Alert.alert("Info", "Función disponible próximamente", [{ text: "OK" }]),
+          onPress: async () => {
+            try {
+              setLoggingOut(true);
+              await signOut();
+              // AuthGate (AppNavigator) detecta la sesión null y vuelve a Login
+            } catch (e: any) {
+              Alert.alert(
+                "Error",
+                e?.message ?? "No se pudo cerrar sesión. Intenta de nuevo.",
+                [{ text: "OK" }]
+              );
+            } finally {
+              setLoggingOut(false);
+            }
+          },
         },
       ],
       { cancelable: true }
@@ -304,7 +330,9 @@ export default function ProfileScreen({ navigation }: Props) {
                   <ChevronRight size={18} color={COLORS.textSoft} />
                 </Pressable>
 
-                {idx !== rows.length - 1 ? <View style={styles.divider} /> : null}
+                {idx !== rows.length - 1 ? (
+                  <View style={styles.divider} />
+                ) : null}
               </View>
             ))}
           </View>
@@ -315,18 +343,27 @@ export default function ProfileScreen({ navigation }: Props) {
         {/* LOGOUT */}
         <View style={styles.section}>
           <Pressable
-            onPress={handleLogout}
+            onPress={loggingOut ? undefined : handleLogout}
             accessibilityRole="button"
             accessibilityLabel="Cerrar sesión"
-            accessibilityHint="Función próximamente"
+            accessibilityHint="Cierra la sesión actual"
+            accessibilityState={{ disabled: loggingOut }}
             style={({ pressed }) => [
               styles.logoutBtn,
-              pressed ? styles.logoutPressed : null,
+              pressed && !loggingOut ? styles.logoutPressed : null,
+              loggingOut ? styles.disabled : null,
             ]}
           >
             <LogOut size={18} color={COLORS.text} />
-            <Text style={styles.logoutText}>Cerrar sesión</Text>
-            <Text style={styles.logoutHint}>Próximamente</Text>
+            <Text style={styles.logoutText}>
+              {loggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
+            </Text>
+
+            {loggingOut ? (
+              <ActivityIndicator style={{ marginLeft: "auto" }} />
+            ) : (
+              <Text style={styles.logoutHint}>Salir</Text>
+            )}
           </Pressable>
         </View>
       </ScrollView>

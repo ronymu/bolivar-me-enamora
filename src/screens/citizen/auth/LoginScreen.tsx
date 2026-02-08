@@ -51,6 +51,10 @@ export default function LoginScreen({ navigation }: Props) {
 
       {msg ? <Text style={s.error}>{msg}</Text> : null}
 
+      <Pressable onPress={() => navigation.navigate("ForgotPassword")} style={{ marginTop: 12 }}>
+        <Text style={s.link}>¿Olvidaste tu contraseña?</Text>
+      </Pressable>
+
       <Pressable onPress={() => navigation.navigate("Signup")} style={{ marginTop: 12 }}>
         <Text style={s.link}>¿No tienes cuenta? Crear</Text>
       </Pressable>

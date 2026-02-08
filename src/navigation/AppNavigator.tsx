@@ -5,9 +5,9 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../context/AuthContext";
 import type { RootStackParamList } from "./navTypes";
 
-// ✅ Tus screens reales (según tu estructura)
 import LoginScreen from "../screens/citizen/auth/LoginScreen";
 import SignupScreen from "../screens/citizen/auth/SignupScreen";
+import ForgotPasswordScreen from "../screens/citizen/auth/ForgotPasswordScreen";
 
 import DiscoverScreen from "../screens/citizen/DiscoverScreen";
 import EventDetailScreen from "../screens/citizen/EventDetailScreen";
@@ -34,43 +34,20 @@ export default function AppNavigator() {
     <Stack.Navigator>
       {session ? (
         <>
-          <Stack.Screen
-            name="Discover"
-            component={DiscoverScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="EventDetail"
-            component={EventDetailScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="MyEvents"
-            component={MyEventsScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="Notifications"
-            component={NotificationsScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="Profile"
-            component={ProfileScreen}
-            options={{ headerShown: false }}
-          />
+          <Stack.Screen name="Discover" component={DiscoverScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="MyEvents" component={MyEventsScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
         </>
       ) : (
         <>
+          <Stack.Screen name="Login" component={LoginScreen} options={{ title: "Iniciar sesión" }} />
+          <Stack.Screen name="Signup" component={SignupScreen} options={{ title: "Crear cuenta" }} />
           <Stack.Screen
-            name="Login"
-            component={LoginScreen}
-            options={{ title: "Iniciar sesión" }}
-          />
-          <Stack.Screen
-            name="Signup"
-            component={SignupScreen}
-            options={{ title: "Crear cuenta" }}
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+            options={{ title: "Recuperar contraseña" }}
           />
         </>
       )}

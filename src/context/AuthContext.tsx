@@ -10,6 +10,7 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   signUp: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
 const Ctx = createContext<AuthState | null>(null);
@@ -52,7 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
 
       if (data.session?.user?.id) {
-        // bootstrap NO bloqueante
         ensureCitizenProfile(data.session.user.id);
       }
     }
@@ -106,6 +106,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabaseMobile.auth.signOut();
   }
 
+  async function sendPasswordReset(email: string) {
+    const clean = email.trim();
+    if (!clean) return { ok: false, error: "Ingresa tu email." };
+
+    // MVP: enviamos correo. El flujo final depende de la configuración de Supabase:
+    // - Site URL + Redirect URLs + plantilla de email.
+    const { error } = await supabaseMobile.auth.resetPasswordForEmail(clean);
+
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+
   const value = useMemo<AuthState>(
     () => ({
       loading,
@@ -114,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       signOut,
+      sendPasswordReset,
     }),
     [loading, session]
   );
