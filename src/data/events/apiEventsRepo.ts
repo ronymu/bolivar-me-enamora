@@ -3,6 +3,7 @@ import type { EventsRepo } from "./eventsRepo";
 import type { ID, Event } from "../../types/domain";
 import { getSupabase } from "../../lib/supabaseClient";
 import { adaptEventFromDb } from "../../adapters/eventAdapter";
+import { hydrateEventMediaRow } from "../../lib/mediaSigner";
 
 /**
  * Lista (Discover / listados)
@@ -81,78 +82,8 @@ function toSupabaseError(context: string, error: any) {
   return new Error(`[Supabase] ${context}${code}: ${msg}`);
 }
 
-/** -----------------------------
- * Media helpers (paths -> signed URLs)
- * ------------------------------ */
-
-// legacy: URL pública completa vieja / URL normal
-function isHttpUrl(s: string) {
-  return /^https?:\/\//i.test((s ?? "").trim());
-}
-
-// Si te llegan URLs signed (por error), igual las dejamos pasar (son http)
-function normalizeMaybePath(s: unknown): string | null {
-  if (typeof s !== "string") return null;
-  const v = s.trim();
-  if (!v) return null;
-
-  // Si ya es URL, se devuelve tal cual
-  if (isHttpUrl(v)) return v;
-
-  // Si es path correcto (events/<eventId>/...), lo devolvemos
-  return v;
-}
-
-async function signedUrlFor(pathOrUrl: string, ttlSeconds: number): Promise<string> {
-  const v = (pathOrUrl ?? "").trim();
-  if (!v) return v;
-
-  // Si ya es URL (legacy), no firmamos
-  if (isHttpUrl(v)) return v;
-
-  const supabase = getSupabase();
-
-  // Firmamos usando bucket privado "events"
-  const { data, error } = await supabase.storage.from("events").createSignedUrl(v, ttlSeconds);
-
-  // Si falla por lo que sea, devolvemos el mismo string (para debug)
-  if (error || !data?.signedUrl) {
-    if (__DEV__) {
-      console.log("[signedUrlFor] failed for path:", v, "error:", error?.message);
-    }
-    return v;
-  }
-
-  return data.signedUrl;
-}
-
-async function hydrateMediaUrls(row: any, ttlSeconds: number) {
-  // cover / thumb
-  const coverRaw = normalizeMaybePath(row?.cover_image_url);
-  const thumbRaw = normalizeMaybePath(row?.thumbnail_url);
-
-  // Galería
-  const galleryRaw: string[] = Array.isArray(row?.image_urls)
-    ? row.image_urls
-        .map(normalizeMaybePath)
-        .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-    : [];
-
-  // Firma (en paralelo)
-  const [coverSigned, thumbSigned, gallerySigned] = await Promise.all([
-    coverRaw ? signedUrlFor(coverRaw, ttlSeconds) : Promise.resolve(null),
-    thumbRaw ? signedUrlFor(thumbRaw, ttlSeconds) : Promise.resolve(null),
-    Promise.all(galleryRaw.map((p) => signedUrlFor(p, ttlSeconds))),
-  ]);
-
-  // Mutamos una copia segura (no tocar row original por si supabase lo congela)
-  return {
-    ...row,
-    cover_image_url: coverSigned ?? row?.cover_image_url ?? null,
-    thumbnail_url: thumbSigned ?? row?.thumbnail_url ?? null,
-    image_urls: gallerySigned,
-  };
-}
+// TTL recomendado para móvil: 1 hora
+const SIGN_TTL_SECONDS = 60 * 60;
 
 export const apiEventsRepo: EventsRepo = {
   async listEvents(): Promise<Event[]> {
@@ -166,10 +97,7 @@ export const apiEventsRepo: EventsRepo = {
 
     if (error) throw toSupabaseError("listEvents", error);
 
-    // TTL recomendado para móvil: 1 hora
-    const ttl = 60 * 60;
-
-    const hydrated = await Promise.all((data ?? []).map((row) => hydrateMediaUrls(row, ttl)));
+    const hydrated = await Promise.all((data ?? []).map((row) => hydrateEventMediaRow(row, SIGN_TTL_SECONDS)));
 
     if (__DEV__) {
       const first = (hydrated ?? [])[0] as any;
@@ -193,10 +121,7 @@ export const apiEventsRepo: EventsRepo = {
     if (error) throw toSupabaseError("getEventById", error);
     if (!data) return null;
 
-    // TTL recomendado para detalle: 1 hora
-    const ttl = 60 * 60;
-
-    const hydrated = await hydrateMediaUrls(data, ttl);
+    const hydrated = await hydrateEventMediaRow(data, SIGN_TTL_SECONDS);
 
     if (__DEV__) {
       console.log("[DETAIL] organizer_profile_id:", (hydrated as any)?.organizer_profile_id);

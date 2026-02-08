@@ -26,7 +26,10 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-asset"],
+    "plugins": [
+      "expo-asset",
+      "expo-secure-store"
+    ],
     "extra": {
       "EVENTS_SOURCE": "api",
       "SUPABASE_URL": "https://lojdyijqbyyhopmggjqc.supabase.co",

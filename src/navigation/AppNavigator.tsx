@@ -1,25 +1,79 @@
 // src/navigation/AppNavigator.tsx
 import React from "react";
+import { ActivityIndicator, View } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useAuth } from "../context/AuthContext";
+import type { RootStackParamList } from "./navTypes";
+
+// ✅ Tus screens reales (según tu estructura)
+import LoginScreen from "../screens/citizen/auth/LoginScreen";
+import SignupScreen from "../screens/citizen/auth/SignupScreen";
 
 import DiscoverScreen from "../screens/citizen/DiscoverScreen";
-import MyEventsScreen from "../screens/citizen/MyEventsScreen";
 import EventDetailScreen from "../screens/citizen/EventDetailScreen";
-import ProfileScreen from "../screens/citizen/ProfileScreen";
+import MyEventsScreen from "../screens/citizen/MyEventsScreen";
 import NotificationsScreen from "../screens/citizen/NotificationsScreen";
-
-import type { RootStackParamList } from "./navTypes";
+import ProfileScreen from "../screens/citizen/ProfileScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function AppNavigator() {
+function Loading() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Discover" component={DiscoverScreen} />
-      <Stack.Screen name="MyEvents" component={MyEventsScreen} />
-      <Stack.Screen name="EventDetail" component={EventDetailScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ActivityIndicator />
+    </View>
+  );
+}
+
+export default function AppNavigator() {
+  const { loading, session } = useAuth();
+
+  if (loading) return <Loading />;
+
+  return (
+    <Stack.Navigator>
+      {session ? (
+        <>
+          <Stack.Screen
+            name="Discover"
+            component={DiscoverScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="EventDetail"
+            component={EventDetailScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="MyEvents"
+            component={MyEventsScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Notifications"
+            component={NotificationsScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Profile"
+            component={ProfileScreen}
+            options={{ headerShown: false }}
+          />
+        </>
+      ) : (
+        <>
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{ title: "Iniciar sesión" }}
+          />
+          <Stack.Screen
+            name="Signup"
+            component={SignupScreen}
+            options={{ title: "Crear cuenta" }}
+          />
+        </>
+      )}
     </Stack.Navigator>
   );
 }
