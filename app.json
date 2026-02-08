@@ -2,6 +2,7 @@
   "expo": {
     "name": "bolivar-me-enamora",
     "slug": "bolivar-me-enamora",
+    "scheme": "bolivar-me-enamora",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

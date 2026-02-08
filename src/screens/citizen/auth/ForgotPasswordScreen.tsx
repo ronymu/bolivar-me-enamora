@@ -24,16 +24,14 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
       return;
     }
 
-    setMsg(
-      "✅ Listo. Te enviamos un correo para recuperar tu contraseña. Abre el enlace y luego vuelve a la app para iniciar sesión."
-    );
+    setMsg("✅ Listo. Te enviamos un correo. Abre el enlace y se abrirá esta app para crear tu nueva contraseña.");
   }
 
   return (
     <View style={s.page}>
       <Text style={s.title}>Recuperar contraseña</Text>
       <Text style={s.subtitle}>
-        Te enviaremos un correo con instrucciones para restablecer tu contraseña.
+        Te enviaremos un correo con un enlace que abrirá la app para restablecer tu contraseña.
       </Text>
 
       <TextInput
@@ -49,17 +47,15 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
         <Text style={s.btnText}>{loading ? "Enviando..." : "Enviar correo"}</Text>
       </Pressable>
 
-      {msg ? (
-        <Text style={msg.startsWith("✅") ? s.ok : s.error}>{msg}</Text>
-      ) : null}
+      {msg ? <Text style={msg.startsWith("✅") ? s.ok : s.error}>{msg}</Text> : null}
 
       <Pressable onPress={() => navigation.navigate("Login")} style={{ marginTop: 12 }}>
         <Text style={s.link}>Volver a Login</Text>
       </Pressable>
 
       <Text style={s.note}>
-        Nota: si aparece “email rate limit exceeded”, es un límite temporal del
-        proveedor de email. Espera un rato e intenta de nuevo.
+        Nota: si aparece “email rate limit exceeded”, es un límite temporal del proveedor de email. Espera un rato e
+        intenta de nuevo.
       </Text>
     </View>
   );

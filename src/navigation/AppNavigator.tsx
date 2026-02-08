@@ -8,6 +8,7 @@ import type { RootStackParamList } from "./navTypes";
 import LoginScreen from "../screens/citizen/auth/LoginScreen";
 import SignupScreen from "../screens/citizen/auth/SignupScreen";
 import ForgotPasswordScreen from "../screens/citizen/auth/ForgotPasswordScreen";
+import ResetPasswordScreen from "../screens/citizen/auth/ResetPasswordScreen";
 
 import DiscoverScreen from "../screens/citizen/DiscoverScreen";
 import EventDetailScreen from "../screens/citizen/EventDetailScreen";
@@ -48,6 +49,11 @@ export default function AppNavigator() {
             name="ForgotPassword"
             component={ForgotPasswordScreen}
             options={{ title: "Recuperar contraseña" }}
+          />
+          <Stack.Screen
+            name="ResetPassword"
+            component={ResetPasswordScreen}
+            options={{ title: "Nueva contraseña" }}
           />
         </>
       )}
