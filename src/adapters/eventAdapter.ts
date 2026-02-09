@@ -28,6 +28,13 @@ function safeText(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+function toNumberOrUndefined(v: unknown): number | undefined {
+  if (v == null) return undefined;
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 function formatDateLabel(startAt: unknown): string {
   const raw = safeText(startAt);
   if (!raw) return "Fecha por confirmar";
@@ -128,11 +135,23 @@ export function adaptEventFromDb(row: any): Event {
 
   const images = (imageUrls.length ? imageUrls : cover ? [cover] : []).map(toMediaSource);
 
+  const lat =
+    toNumberOrUndefined(row?.lat) ??
+    toNumberOrUndefined(row?.latitude) ??
+    toNumberOrUndefined(row?.location_lat);
+
+  const lng =
+    toNumberOrUndefined(row?.lng) ??
+    toNumberOrUndefined(row?.longitude) ??
+    toNumberOrUndefined(row?.location_lng);
+
   const location: Location | undefined =
-    city || address
+    city || address || lat != null || lng != null
       ? {
           city: city || undefined,
           address: address || undefined,
+          latitude: lat,
+          longitude: lng,
         }
       : undefined;
 

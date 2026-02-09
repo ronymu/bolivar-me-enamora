@@ -9,6 +9,7 @@ import {
   Pressable,
   Text,
   StatusBar,
+  Image,
 } from "react-native";
 import Swiper from "react-native-deck-swiper";
 import { Asset } from "expo-asset";
@@ -22,17 +23,33 @@ import { useFavorites } from "../../context/FavoritesContext";
 import { useEvents } from "../../context/EventsContext";
 import type { RootScreenProps } from "../../navigation/navTypes";
 import type { Event } from "../../types/domain";
+import type { ImageSourcePropType } from "react-native";
 
 const { width, height } = Dimensions.get("window");
 const HEADER_BTN_SIZE = 44;
 
 type Props = RootScreenProps<"Discover">;
 
+function isRemoteUriSource(src: ImageSourcePropType): src is { uri: string } {
+  return (
+    !!src &&
+    typeof src === "object" &&
+    "uri" in (src as any) &&
+    typeof (src as any).uri === "string" &&
+    (src as any).uri.trim().length > 0
+  );
+}
+
+function isHttpUrl(uri: string) {
+  const u = uri.trim().toLowerCase();
+  return u.startsWith("http://") || u.startsWith("https://");
+}
+
 export default function DiscoverScreen({ navigation }: Props) {
   const swiperRef = useRef<Swiper<Event>>(null);
   const insets = useSafeAreaInsets();
 
-  const { events, isLoading } = useEvents();
+  const { events, isLoading, error, refresh } = useEvents();
   const data = useMemo<Event[]>(() => events, [events]);
 
   const { addFavorite } = useFavorites();
@@ -50,13 +67,38 @@ export default function DiscoverScreen({ navigation }: Props) {
 
     const preload = async () => {
       try {
-        const images = data.map((e) => e.image).filter(Boolean);
-        await Promise.all(images.map((img) => Asset.fromModule(img).downloadAsync()));
+        const images = data.map((e) => e.image).filter(Boolean) as ImageSourcePropType[];
+
+        // Preload dual:
+        // - require(...) -> Asset.fromModule(number)
+        // - { uri } http(s) -> Image.prefetch
+        await Promise.all(
+          images.map(async (img) => {
+            try {
+              if (typeof img === "number") {
+                await Asset.fromModule(img).downloadAsync();
+                return;
+              }
+
+              if (isRemoteUriSource(img)) {
+                const uri = img.uri.trim();
+
+                // Para data: o file: no vale la pena prefetch; Image lo maneja bien.
+                if (isHttpUrl(uri)) {
+                  await Image.prefetch(uri);
+                }
+              }
+            } catch {
+              // No bloqueamos UI si un preload falla.
+            }
+          })
+        );
       } finally {
         if (!cancelled) setAssetsReady(true);
       }
     };
 
+    // Si hay datos, intentamos precargar; si no, reset.
     if (data.length > 0) preload();
     else setAssetsReady(false);
 
@@ -123,6 +165,8 @@ export default function DiscoverScreen({ navigation }: Props) {
     );
   }, []);
 
+  const showFooter = !isLoading && !error && assetsReady && data.length > 0;
+
   return (
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
@@ -171,6 +215,20 @@ export default function DiscoverScreen({ navigation }: Props) {
           <View style={styles.loading} accessible accessibilityRole="text" accessibilityLabel="Cargando eventos">
             <ActivityIndicator />
           </View>
+        ) : error ? (
+          <View style={styles.done} accessible accessibilityRole="text" accessibilityLabel="Error cargando eventos">
+            <Text style={styles.doneText}>No se pudieron cargar los eventos</Text>
+            <Text style={styles.doneHint}>{error}</Text>
+
+            <Pressable
+              onPress={refresh}
+              style={({ pressed }) => [styles.retryBtn, pressed ? styles.retryBtnPressed : null]}
+              accessibilityRole="button"
+              accessibilityLabel="Reintentar"
+            >
+              <Text style={styles.retryBtnText}>Reintentar</Text>
+            </Pressable>
+          </View>
         ) : data.length === 0 ? (
           <View style={styles.done} accessible accessibilityRole="text" accessibilityLabel="No hay eventos disponibles">
             <Text style={styles.doneText}>No hay eventos disponibles</Text>
@@ -217,7 +275,7 @@ export default function DiscoverScreen({ navigation }: Props) {
         )}
 
         {/* FOOTER */}
-        {!isLoading && assetsReady && data.length > 0 && (
+        {showFooter && (
           <View pointerEvents="box-none" style={[styles.footerOverlay, { bottom: insets.bottom + 2 }]}>
             <SwipeFooter
               onUndo={handleUndo}
@@ -290,6 +348,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     marginTop: 8,
-    textAlign: "center"
+    textAlign: "center",
   },
+
+  retryBtn: {
+    marginTop: 14,
+    height: 46,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  retryBtnPressed: {
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderColor: "rgba(255,255,255,0.28)",
+  },
+  retryBtnText: { color: "white", fontSize: 14, fontWeight: "800" },
 });
