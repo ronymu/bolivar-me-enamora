@@ -1,6 +1,6 @@
 // src/screens/citizen/MyEventsScreen.tsx
-import React, { useMemo } from "react";
-import { StyleSheet, View, Text, FlatList, Pressable, Image } from "react-native";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { StyleSheet, View, Text, FlatList, Pressable, Image, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, Heart } from "lucide-react-native";
 
@@ -22,12 +22,42 @@ const COLORS = {
 
 export default function MyEventsScreen({ navigation }: Props) {
   const { favoriteIds, removeFavorite, isFavorite } = useFavorites();
-  const { events, isLoading } = useEvents();
+  const { getById, hydrateById, isLoading: isListLoading } = useEvents();
 
-  const favorites = useMemo<Event[]>(
-    () => events.filter((e) => favoriteIds.includes(e.id)),
-    [events, favoriteIds]
-  );
+  const [isHydrating, setIsHydrating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const favoriteEvents = useMemo<Event[]>(() => {
+    // Mantener el orden del usuario (según favoriteIds)
+    const out: Event[] = [];
+    for (const id of favoriteIds) {
+      const e = getById(id);
+      if (e) out.push(e);
+    }
+    return out;
+  }, [favoriteIds, getById]);
+
+  const hydrateMissing = useCallback(async () => {
+    if (favoriteIds.length === 0) return;
+
+    setIsHydrating(true);
+    setError(null);
+
+    try {
+      // Hidrata todos los IDs (si ya está en cache, mergea suave)
+      await Promise.all(favoriteIds.map((id) => hydrateById(id)));
+    } catch (e: any) {
+      setError(e?.message ?? "No se pudieron cargar tus eventos guardados.");
+    } finally {
+      setIsHydrating(false);
+    }
+  }, [favoriteIds, hydrateById]);
+
+  useEffect(() => {
+    hydrateMissing();
+  }, [hydrateMissing]);
+
+  const showLoading = isListLoading || (isHydrating && favoriteIds.length > 0);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -52,20 +82,51 @@ export default function MyEventsScreen({ navigation }: Props) {
       </View>
 
       {/* Content */}
-      {isLoading ? (
+      {showLoading ? (
         <View style={styles.center}>
+          <ActivityIndicator />
           <Text style={styles.emptyText}>Cargando…</Text>
         </View>
-      ) : favorites.length === 0 ? (
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyTitle}>No se pudieron cargar tus eventos</Text>
+          <Text style={styles.emptyText}>{error}</Text>
+
+          <Pressable
+            onPress={hydrateMissing}
+            style={({ pressed }) => [styles.retryBtn, pressed ? styles.retryBtnPressed : null]}
+            accessibilityRole="button"
+            accessibilityLabel="Reintentar"
+          >
+            <Text style={styles.retryBtnText}>Reintentar</Text>
+          </Pressable>
+        </View>
+      ) : favoriteIds.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>Aún no tienes eventos guardados</Text>
           <Text style={styles.emptyText}>
             Haz swipe a la derecha en Discover para guardar tus favoritos.
           </Text>
         </View>
+      ) : favoriteEvents.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyTitle}>Tus favoritos no están disponibles</Text>
+          <Text style={styles.emptyText}>
+            Puede que algunos eventos ya no estén publicados. Intenta recargar.
+          </Text>
+
+          <Pressable
+            onPress={hydrateMissing}
+            style={({ pressed }) => [styles.retryBtn, pressed ? styles.retryBtnPressed : null]}
+            accessibilityRole="button"
+            accessibilityLabel="Reintentar"
+          >
+            <Text style={styles.retryBtnText}>Reintentar</Text>
+          </Pressable>
+        </View>
       ) : (
         <FlatList
-          data={favorites}
+          data={favoriteEvents}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
           showsVerticalScrollIndicator={false}
@@ -81,12 +142,7 @@ export default function MyEventsScreen({ navigation }: Props) {
               >
                 {/* Imagen */}
                 <View style={styles.imageWrap}>
-                  <Image
-                    source={item.image}
-                    style={styles.image}
-                    resizeMode="cover"
-                    fadeDuration={0}
-                  />
+                  <Image source={item.image} style={styles.image} resizeMode="cover" fadeDuration={0} />
                 </View>
 
                 {/* Texto */}
@@ -161,6 +217,20 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
   emptyTitle: { fontSize: 16, fontWeight: "900", color: COLORS.text, textAlign: "center" },
   emptyText: { marginTop: 8, color: COLORS.textSoft, fontWeight: "700", textAlign: "center" },
+
+  retryBtn: {
+    marginTop: 14,
+    height: 46,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(107,100,93,0.18)",
+  },
+  retryBtnPressed: { backgroundColor: "rgba(0,0,0,0.10)" },
+  retryBtnText: { color: COLORS.text, fontWeight: "900" },
 
   card: {
     backgroundColor: COLORS.surface,
