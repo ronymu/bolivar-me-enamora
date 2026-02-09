@@ -1,5 +1,5 @@
 // src/screens/citizen/ProfileScreen.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -26,6 +26,7 @@ import {
 import type { RootScreenProps } from "../../navigation/navTypes";
 import { useNotificationPrefs } from "../../hooks/useNotificationPrefs";
 import { useAuth } from "../../context/AuthContext";
+import { supabaseMobile } from "../../lib/supabaseMobileClient";
 
 const COLORS = {
   bg: "#F2F2F2",
@@ -57,6 +58,30 @@ type RowItem = {
   disabled?: boolean;
 };
 
+type ProfileRow = {
+  id: string;
+  role?: string | null;
+  display_name?: string | null;
+  full_name?: string | null;
+  organization_name?: string | null;
+  avatar_url?: string | null;
+};
+
+function roleToLabel(role?: string | null) {
+  const r = String(role ?? "").toLowerCase().trim();
+  if (r === "admin") return "Administrador";
+  if (r === "organizer") return "Organizador";
+  if (r === "citizen") return "Ciudadano";
+  return "Usuario";
+}
+
+function pickName(p?: ProfileRow | null) {
+  const dn = (p?.display_name ?? "").trim();
+  const fn = (p?.full_name ?? "").trim();
+  const org = (p?.organization_name ?? "").trim();
+  return dn || fn || org || "Usuario";
+}
+
 export default function ProfileScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { remindersEnabled, setRemindersEnabled } = useNotificationPrefs();
@@ -64,16 +89,68 @@ export default function ProfileScreen({ navigation }: Props) {
   const { user: authUser, signOut } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const user = useMemo(
-    () => ({
-      fullName: "Usuario", // luego lo llenamos desde profiles
-      email: authUser?.email ?? "Sin email",
-      roleLabel: "Ciudadano",
-      avatarUrl: null as string | null,
-      hasSession: !!authUser,
-    }),
-    [authUser]
-  );
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileRow, setProfileRow] = useState<ProfileRow | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadProfile() {
+      const userId = authUser?.id;
+      if (!userId) {
+        setProfileRow(null);
+        setProfileError(null);
+        setProfileLoading(false);
+        return;
+      }
+
+      setProfileLoading(true);
+      setProfileError(null);
+
+      try {
+        const { data, error } = await supabaseMobile
+          .from("profiles")
+          .select("id, role, display_name, full_name, organization_name, avatar_url")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (error) throw new Error(error.message);
+
+        if (!alive) return;
+        setProfileRow((data as any) ?? null);
+      } catch (e: any) {
+        if (!alive) return;
+        setProfileRow(null);
+        setProfileError(e?.message ?? "No se pudo cargar el perfil.");
+      } finally {
+        if (!alive) return;
+        setProfileLoading(false);
+      }
+    }
+
+    loadProfile();
+
+    return () => {
+      alive = false;
+    };
+  }, [authUser?.id]);
+
+  const user = useMemo(() => {
+    const hasSession = !!authUser;
+
+    const name = hasSession ? pickName(profileRow) : "Sin sesión";
+    const email = hasSession ? (authUser?.email ?? "Sin email") : "Inicia sesión para ver tu cuenta";
+    const roleLabel = hasSession ? roleToLabel(profileRow?.role ?? "citizen") : "Visitante";
+
+    return {
+      fullName: name,
+      email,
+      roleLabel,
+      avatarUrl: profileRow?.avatar_url ?? null,
+      hasSession,
+    };
+  }, [authUser, profileRow]);
 
   const showComingSoon = () => {
     Alert.alert(
@@ -138,11 +215,8 @@ export default function ProfileScreen({ navigation }: Props) {
   );
 
   const handleLogout = () => {
-    // Si por alguna razón no hay sesión, no mostramos logout
     if (!user.hasSession) {
-      Alert.alert("Sin sesión", "No hay un usuario activo para cerrar sesión.", [
-        { text: "OK" },
-      ]);
+      Alert.alert("Sin sesión", "No hay un usuario activo para cerrar sesión.", [{ text: "OK" }]);
       return;
     }
 
@@ -160,11 +234,9 @@ export default function ProfileScreen({ navigation }: Props) {
               await signOut();
               // AuthGate (AppNavigator) detecta la sesión null y vuelve a Login
             } catch (e: any) {
-              Alert.alert(
-                "Error",
-                e?.message ?? "No se pudo cerrar sesión. Intenta de nuevo.",
-                [{ text: "OK" }]
-              );
+              Alert.alert("Error", e?.message ?? "No se pudo cerrar sesión. Intenta de nuevo.", [
+                { text: "OK" },
+              ]);
             } finally {
               setLoggingOut(false);
             }
@@ -179,10 +251,7 @@ export default function ProfileScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + 28 },
-        ]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
       >
         {/* HEADER */}
         <View style={styles.header}>
@@ -205,6 +274,7 @@ export default function ProfileScreen({ navigation }: Props) {
             <Text style={styles.name} numberOfLines={1}>
               {user.fullName}
             </Text>
+
             <Text style={styles.email} numberOfLines={1}>
               {user.email}
             </Text>
@@ -212,6 +282,18 @@ export default function ProfileScreen({ navigation }: Props) {
             <View style={styles.rolePill}>
               <Text style={styles.roleText}>{user.roleLabel}</Text>
             </View>
+
+            {/* Estado perfil */}
+            {user.hasSession && profileLoading ? (
+              <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <ActivityIndicator />
+                <Text style={[styles.profileHint, { color: COLORS.textSoft }]}>Cargando perfil…</Text>
+              </View>
+            ) : user.hasSession && profileError ? (
+              <Text style={[styles.profileHint, { color: COLORS.textSoft, marginTop: 10 }]}>
+                No se pudo cargar el rol/nombre. (Puedes seguir usando la app)
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -288,9 +370,7 @@ export default function ProfileScreen({ navigation }: Props) {
                   false: "rgba(107,100,93,0.25)",
                   true: COLORS.coralSoft,
                 }}
-                thumbColor={
-                  remindersEnabled ? COLORS.coral : "rgba(107,100,93,0.65)"
-                }
+                thumbColor={remindersEnabled ? COLORS.coral : "rgba(107,100,93,0.65)"}
                 ios_backgroundColor="rgba(107,100,93,0.25)"
               />
             </View>
@@ -321,18 +401,14 @@ export default function ProfileScreen({ navigation }: Props) {
                     <View style={styles.navIcon}>{r.leftIcon}</View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.navTitle}>{r.title}</Text>
-                      {r.subtitle ? (
-                        <Text style={styles.navSubtitle}>{r.subtitle}</Text>
-                      ) : null}
+                      {r.subtitle ? <Text style={styles.navSubtitle}>{r.subtitle}</Text> : null}
                     </View>
                   </View>
 
                   <ChevronRight size={18} color={COLORS.textSoft} />
                 </Pressable>
 
-                {idx !== rows.length - 1 ? (
-                  <View style={styles.divider} />
-                ) : null}
+                {idx !== rows.length - 1 ? <View style={styles.divider} /> : null}
               </View>
             ))}
           </View>
@@ -347,22 +423,23 @@ export default function ProfileScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Cerrar sesión"
             accessibilityHint="Cierra la sesión actual"
-            accessibilityState={{ disabled: loggingOut }}
+            accessibilityState={{ disabled: loggingOut || !user.hasSession }}
             style={({ pressed }) => [
               styles.logoutBtn,
               pressed && !loggingOut ? styles.logoutPressed : null,
-              loggingOut ? styles.disabled : null,
+              loggingOut || !user.hasSession ? styles.disabled : null,
             ]}
+            disabled={loggingOut || !user.hasSession}
           >
             <LogOut size={18} color={COLORS.text} />
             <Text style={styles.logoutText}>
-              {loggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
+              {!user.hasSession ? "Inicia sesión para salir" : loggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
             </Text>
 
             {loggingOut ? (
               <ActivityIndicator style={{ marginLeft: "auto" }} />
             ) : (
-              <Text style={styles.logoutHint}>Salir</Text>
+              <Text style={styles.logoutHint}>{user.hasSession ? "Salir" : ""}</Text>
             )}
           </Pressable>
         </View>
@@ -420,6 +497,11 @@ const styles = StyleSheet.create({
     borderColor: "rgba(107,100,93,0.14)",
   },
   roleText: { color: COLORS.text, fontSize: 12, fontWeight: "800" },
+
+  profileHint: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
 
   section: { marginTop: 18 },
   sectionTitle: {
