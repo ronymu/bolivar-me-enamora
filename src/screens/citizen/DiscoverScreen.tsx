@@ -21,6 +21,8 @@ import EventCard from "../../components/EventCard";
 import SwipeFooter from "../../components/SwipeFooter";
 import { useFavorites } from "../../context/FavoritesContext";
 import { useEvents } from "../../context/EventsContext";
+import { useAuth } from "../../context/AuthContext";
+import { useSeenEvents } from "../../hooks/useSeenEvents";
 import type { RootScreenProps } from "../../navigation/navTypes";
 import type { Event } from "../../types/domain";
 import type { ImageSourcePropType } from "react-native";
@@ -29,6 +31,9 @@ const { width, height } = Dimensions.get("window");
 const HEADER_BTN_SIZE = 44;
 
 type Props = RootScreenProps<"Discover">;
+
+// ✅ MODO PRUEBAS: mientras validas UX, déjalo en true
+const IS_DEV_SHOW_ALL_SEEN = true;
 
 function isRemoteUriSource(src: ImageSourcePropType): src is { uri: string } {
   return (
@@ -45,14 +50,50 @@ function isHttpUrl(uri: string) {
   return u.startsWith("http://") || u.startsWith("https://");
 }
 
+function uniqKeepOrder<T extends { id: string }>(arr: T[]) {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const it of arr) {
+    const id = String(it?.id ?? "").trim();
+    if (!id) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(it);
+  }
+  return out;
+}
+
 export default function DiscoverScreen({ navigation }: Props) {
   const swiperRef = useRef<Swiper<Event>>(null);
   const insets = useSafeAreaInsets();
 
   const { events, isLoading, error, refresh } = useEvents();
-  const data = useMemo<Event[]>(() => events, [events]);
-
   const { addFavorite } = useFavorites();
+
+  // ✅ Usuario actual
+  const { user } = useAuth();
+
+  // ✅ Memoria por usuario
+  const { seenIds, isLoaded: seenLoaded, markAsSeen } = useSeenEvents(user?.id ?? "guest");
+
+  // ✅ Data estable para el Swiper (no refiltrar en caliente)
+  const [data, setData] = useState<Event[]>([]);
+
+  useEffect(() => {
+    if (!seenLoaded) return;
+
+    const base = uniqKeepOrder(Array.isArray(events) ? events : []);
+
+    if (IS_DEV_SHOW_ALL_SEEN) {
+      setData(base);
+      return;
+    }
+
+    const seenSet = new Set(seenIds);
+    setData(base.filter((e) => !seenSet.has(e.id)));
+    // ⚠️ a propósito NO dependemos de seenIds para no cambiar cards mientras swipes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events, seenLoaded, user?.id]);
 
   const [assetsReady, setAssetsReady] = useState(false);
   const [isDone, setIsDone] = useState(false);
@@ -67,11 +108,11 @@ export default function DiscoverScreen({ navigation }: Props) {
 
     const preload = async () => {
       try {
-        const images = data.map((e) => e.image).filter(Boolean) as ImageSourcePropType[];
+        const images = data
+          .slice(0, 10) // ✅ limitado
+          .map((e) => e.image)
+          .filter(Boolean) as ImageSourcePropType[];
 
-        // Preload dual:
-        // - require(...) -> Asset.fromModule(number)
-        // - { uri } http(s) -> Image.prefetch
         await Promise.all(
           images.map(async (img) => {
             try {
@@ -79,18 +120,11 @@ export default function DiscoverScreen({ navigation }: Props) {
                 await Asset.fromModule(img).downloadAsync();
                 return;
               }
-
               if (isRemoteUriSource(img)) {
                 const uri = img.uri.trim();
-
-                // Para data: o file: no vale la pena prefetch; Image lo maneja bien.
-                if (isHttpUrl(uri)) {
-                  await Image.prefetch(uri);
-                }
+                if (isHttpUrl(uri)) await Image.prefetch(uri);
               }
-            } catch {
-              // No bloqueamos UI si un preload falla.
-            }
+            } catch {}
           })
         );
       } finally {
@@ -98,7 +132,6 @@ export default function DiscoverScreen({ navigation }: Props) {
       }
     };
 
-    // Si hay datos, intentamos precargar; si no, reset.
     if (data.length > 0) preload();
     else setAssetsReady(false);
 
@@ -108,24 +141,30 @@ export default function DiscoverScreen({ navigation }: Props) {
   }, [data]);
 
   useEffect(() => {
-    // Reset al cambiar dataset (ej: cuando venga backend/paginación)
     setIsDone(false);
     setCardIndex(0);
     lastIndexRef.current = null;
     setCanUndo(false);
   }, [data.length]);
 
+  // ✅ FIX GLITCH: defer state update al siguiente frame
   const handleSwiped = useCallback(
     (index: number) => {
-      lastIndexRef.current = index;
-      setCanUndo(true);
+      requestAnimationFrame(() => {
+        const current = data[index];
+        if (current) {
+          markAsSeen(current.id);
+          lastIndexRef.current = index;
+          setCanUndo(true);
+        }
 
-      const nextIndex = index + 1;
-      setCardIndex(nextIndex);
+        const nextIndex = index + 1;
+        setCardIndex(nextIndex);
 
-      if (nextIndex >= data.length) setIsDone(true);
+        if (nextIndex >= data.length) setIsDone(true);
+      });
     },
-    [data.length]
+    [data, markAsSeen]
   );
 
   const handleSwipedRight = useCallback(
@@ -165,7 +204,7 @@ export default function DiscoverScreen({ navigation }: Props) {
     );
   }, []);
 
-  const showFooter = !isLoading && !error && assetsReady && data.length > 0;
+  const showFooter = !isLoading && !error && assetsReady && data.length > 0 && !isDone;
 
   return (
     <View style={styles.container}>
@@ -180,7 +219,6 @@ export default function DiscoverScreen({ navigation }: Props) {
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Notificaciones"
-            accessibilityHint="Abre la bandeja de recordatorios"
           >
             <Bell size={22} color="white" />
           </Pressable>
@@ -191,7 +229,6 @@ export default function DiscoverScreen({ navigation }: Props) {
             style={styles.pillWrapper}
             accessibilityRole="button"
             accessibilityLabel="Mis eventos"
-            accessibilityHint="Abre tu lista de eventos guardados"
           >
             <BlurView intensity={35} tint="dark" style={styles.pill}>
               <Text style={styles.pillText}>Mis eventos</Text>
@@ -204,19 +241,17 @@ export default function DiscoverScreen({ navigation }: Props) {
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Perfil"
-            accessibilityHint="Abre tu perfil y preferencias"
           >
             <User size={22} color="white" />
           </Pressable>
         </View>
 
-        {/* Loading global de datos */}
-        {isLoading ? (
-          <View style={styles.loading} accessible accessibilityRole="text" accessibilityLabel="Cargando eventos">
+        {isLoading || !seenLoaded ? (
+          <View style={styles.loading} accessibilityRole="text" accessibilityLabel="Cargando eventos">
             <ActivityIndicator />
           </View>
         ) : error ? (
-          <View style={styles.done} accessible accessibilityRole="text" accessibilityLabel="Error cargando eventos">
+          <View style={styles.done} accessibilityRole="text" accessibilityLabel="Error cargando eventos">
             <Text style={styles.doneText}>No se pudieron cargar los eventos</Text>
             <Text style={styles.doneHint}>{error}</Text>
 
@@ -230,15 +265,20 @@ export default function DiscoverScreen({ navigation }: Props) {
             </Pressable>
           </View>
         ) : data.length === 0 ? (
-          <View style={styles.done} accessible accessibilityRole="text" accessibilityLabel="No hay eventos disponibles">
+          <View style={styles.done} accessibilityRole="text" accessibilityLabel="No hay eventos disponibles">
             <Text style={styles.doneText}>No hay eventos disponibles</Text>
+            <Text style={styles.doneHint}>
+              {IS_DEV_SHOW_ALL_SEEN
+                ? "Modo pruebas activo: deberías ver eventos incluso si ya los viste. (Si no hay, no hay publicados.)"
+                : "Puede que ya los hayas visto todos o no haya publicados."}
+            </Text>
           </View>
         ) : !assetsReady ? (
-          <View style={styles.loading} accessible accessibilityRole="text" accessibilityLabel="Cargando imágenes">
+          <View style={styles.loading} accessibilityRole="text" accessibilityLabel="Cargando imágenes">
             <ActivityIndicator />
           </View>
         ) : isDone ? (
-          <View style={styles.done} accessible accessibilityRole="text" accessibilityLabel="No hay más eventos">
+          <View style={styles.done} accessibilityRole="text" accessibilityLabel="No hay más eventos">
             <Text style={styles.doneText}>No hay más eventos</Text>
             {canUndo ? <Text style={styles.doneHint}>Puedes deshacer el último swipe.</Text> : null}
           </View>
@@ -256,12 +296,12 @@ export default function DiscoverScreen({ navigation }: Props) {
                 backgroundColor: "transparent",
                 containerStyle: styles.swiperContainer,
                 cardStyle: styles.cardStyle,
-                stackSize: 2,
+                stackSize: 3,
                 stackSeparation: 14,
                 stackScale: 8,
                 animateCardOpacity: false,
                 animateOverlayLabelsOpacity: false,
-                swipeAnimationDuration: 160,
+                swipeAnimationDuration: 180,
                 removeClippedSubviews: false,
                 disableTopSwipe: true,
                 disableBottomSwipe: true,
@@ -274,7 +314,6 @@ export default function DiscoverScreen({ navigation }: Props) {
           </View>
         )}
 
-        {/* FOOTER */}
         {showFooter && (
           <View pointerEvents="box-none" style={[styles.footerOverlay, { bottom: insets.bottom + 2 }]}>
             <SwipeFooter

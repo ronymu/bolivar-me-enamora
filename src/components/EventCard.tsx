@@ -1,14 +1,6 @@
 // src/components/EventCard.tsx
 import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Dimensions,
-  Platform,
-  Image,
-} from "react-native";
+import { View, Text, StyleSheet, Pressable, Dimensions, Platform, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,27 +12,19 @@ type Props = {
   description: string;
   image: MediaSource;
   chips: string[];
-  eventId: string; // ✅ ahora es obligatorio
+  eventId: string;
 };
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
 
-// ✅ Más compacto con el footer (X/♥)
 const FOOTER_RESERVED_SPACE = 92;
 const BASE_PADDING = 16;
 
-export default function EventCard({
-  title,
-  description,
-  image,
-  chips,
-  eventId,
-}: Props) {
+export default function EventCard({ title, description, image, chips, eventId }: Props) {
   const navigation = useNavigation<RootNav<"Discover">>();
   const insets = useSafeAreaInsets();
 
-  const contentPaddingBottom =
-    BASE_PADDING + insets.bottom + FOOTER_RESERVED_SPACE;
+  const contentPaddingBottom = BASE_PADDING + insets.bottom + FOOTER_RESERVED_SPACE;
 
   const goToDetail = () => {
     navigation.navigate("EventDetail", { eventId });
@@ -57,7 +41,7 @@ export default function EventCard({
       renderToHardwareTextureAndroid
       shouldRasterizeIOS
     >
-      {/* ✅ Imagen absoluta + sin fade para Android (elimina el flash/glitch) */}
+      {/* ✅ CLAVE: fadeDuration=0 */}
       <Image
         source={image}
         style={styles.image}
@@ -66,10 +50,8 @@ export default function EventCard({
         progressiveRenderingEnabled
       />
 
-      {/* Overlay global MUY suave para estabilizar contraste */}
       <View pointerEvents="none" style={styles.softOverlay} />
 
-      {/* ✅ Gradiente real (suave) — evita líneas/banding por “capas sólidas” */}
       <LinearGradient
         pointerEvents="none"
         colors={[
@@ -86,10 +68,8 @@ export default function EventCard({
         style={styles.gradient}
       />
 
-      {/* ✅ “Grain” sutil para romper banding (sin assets) */}
       <View pointerEvents="none" style={styles.grain} />
 
-      {/* CONTENIDO (bajito / más junto al footer) */}
       <View style={[styles.content, { paddingBottom: contentPaddingBottom }]}>
         <Text style={styles.title} numberOfLines={2}>
           {title}
@@ -99,7 +79,6 @@ export default function EventCard({
           {description}
         </Text>
 
-        {/* ✅ Chips debajo de la descripción (como estaba antes) */}
         <View style={styles.chips}>
           {chips.map((chip) => (
             <View key={`${eventId}-${chip}`} style={styles.chip}>
@@ -139,11 +118,10 @@ const styles = StyleSheet.create({
     height: SCREEN_H * 0.62,
   },
 
-  // Grain sin imagen: micro-contraste con muy baja opacidad.
   grain: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(255,255,255,0.02)",
-    opacity: Platform.OS === "android" ? 0.10 : 0.06,
+    opacity: Platform.OS === "android" ? 0.1 : 0.06,
   },
 
   content: {

@@ -9,6 +9,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 
 export default function LoginScreen({ navigation }: Props) {
   const { signIn } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -16,12 +17,27 @@ export default function LoginScreen({ navigation }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
 
   async function onLogin() {
+    if (loading) return;
+
     setMsg(null);
     setLoading(true);
-    const res = await signIn(email, password);
-    setLoading(false);
 
-    if (!res.ok) setMsg(res.error ?? "Error");
+    try {
+      const res = await signIn(email, password);
+
+      if (!res.ok) {
+        setMsg(res.error ?? "Error");
+        return;
+      }
+
+      // ✅ FIX: Redirige al Home en modo navegador unificado
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Discover" }],
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -36,13 +52,19 @@ export default function LoginScreen({ navigation }: Props) {
         autoCapitalize="none"
         keyboardType="email-address"
         style={s.input}
+        editable={!loading}
+        returnKeyType="next"
       />
+
       <TextInput
         value={password}
         onChangeText={setPassword}
         placeholder="Contraseña"
         secureTextEntry
         style={s.input}
+        editable={!loading}
+        returnKeyType="done"
+        onSubmitEditing={onLogin}
       />
 
       <Pressable style={s.btn} onPress={onLogin} disabled={loading}>
@@ -51,11 +73,11 @@ export default function LoginScreen({ navigation }: Props) {
 
       {msg ? <Text style={s.error}>{msg}</Text> : null}
 
-      <Pressable onPress={() => navigation.navigate("ForgotPassword")} style={{ marginTop: 12 }}>
+      <Pressable onPress={() => navigation.navigate("ForgotPassword")} style={{ marginTop: 12 }} disabled={loading}>
         <Text style={s.link}>¿Olvidaste tu contraseña?</Text>
       </Pressable>
 
-      <Pressable onPress={() => navigation.navigate("Signup")} style={{ marginTop: 12 }}>
+      <Pressable onPress={() => navigation.navigate("Signup")} style={{ marginTop: 12 }} disabled={loading}>
         <Text style={s.link}>¿No tienes cuenta? Crear</Text>
       </Pressable>
     </View>

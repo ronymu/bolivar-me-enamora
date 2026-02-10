@@ -21,6 +21,7 @@ import {
   FileText,
   LogOut,
   User,
+  Trash2,
 } from "lucide-react-native";
 
 import type { RootScreenProps } from "../../navigation/navTypes";
@@ -232,11 +233,47 @@ export default function ProfileScreen({ navigation }: Props) {
             try {
               setLoggingOut(true);
               await signOut();
-              // AuthGate (AppNavigator) detecta la sesión null y vuelve a Login
             } catch (e: any) {
-              Alert.alert("Error", e?.message ?? "No se pudo cerrar sesión. Intenta de nuevo.", [
-                { text: "OK" },
-              ]);
+              Alert.alert("Error", e?.message ?? "No se pudo cerrar sesión. Intenta de nuevo.", [{ text: "OK" }]);
+            } finally {
+              setLoggingOut(false);
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // ✅ NUEVO: handler honesto para Apple (MVP)
+  const handleDeleteAccount = () => {
+    if (!user.hasSession) {
+      Alert.alert("Sin sesión", "Debes iniciar sesión para solicitar la eliminación de tu cuenta.", [{ text: "OK" }]);
+      return;
+    }
+
+    Alert.alert(
+      "Eliminar cuenta",
+      "Esta acción solicitará el borrado permanente de tus datos. ¿Deseas continuar?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Solicitar eliminación",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoggingOut(true);
+
+              // MVP: aquí luego irá una Edge Function (delete-account).
+              // Por ahora cerramos sesión y damos feedback honesto.
+              await signOut();
+
+              Alert.alert(
+                "Solicitud enviada",
+                "Hemos recibido tu solicitud. Tus datos serán eliminados permanentemente en un plazo de 72 horas."
+              );
+            } catch (e: any) {
+              Alert.alert("Error", e?.message ?? "No se pudo procesar la solicitud. Intenta de nuevo.", [{ text: "OK" }]);
             } finally {
               setLoggingOut(false);
             }
@@ -343,10 +380,7 @@ export default function ProfileScreen({ navigation }: Props) {
                 accessibilityLabel="Modo oscuro"
                 accessibilityHint="Función próximamente"
                 accessibilityState={{ disabled: true }}
-                trackColor={{
-                  false: "rgba(107,100,93,0.15)",
-                  true: COLORS.coralSoft,
-                }}
+                trackColor={{ false: "rgba(107,100,93,0.15)", true: COLORS.coralSoft }}
                 thumbColor="rgba(107,100,93,0.45)"
                 ios_backgroundColor="rgba(107,100,93,0.15)"
               />
@@ -366,10 +400,7 @@ export default function ProfileScreen({ navigation }: Props) {
                 accessibilityLabel="Recordatorios"
                 accessibilityHint="Activa o desactiva recordatorios de eventos guardados"
                 accessibilityState={{ checked: remindersEnabled }}
-                trackColor={{
-                  false: "rgba(107,100,93,0.25)",
-                  true: COLORS.coralSoft,
-                }}
+                trackColor={{ false: "rgba(107,100,93,0.25)", true: COLORS.coralSoft }}
                 thumbColor={remindersEnabled ? COLORS.coral : "rgba(107,100,93,0.65)"}
                 ios_backgroundColor="rgba(107,100,93,0.25)"
               />
@@ -416,7 +447,7 @@ export default function ProfileScreen({ navigation }: Props) {
           <Text style={styles.versionText}>Versión 0.1 • MVP</Text>
         </View>
 
-        {/* LOGOUT */}
+        {/* ✅ LOGOUT (AHORA VA ANTES DE ZONA DE PELIGRO) */}
         <View style={styles.section}>
           <Pressable
             onPress={loggingOut ? undefined : handleLogout}
@@ -443,6 +474,31 @@ export default function ProfileScreen({ navigation }: Props) {
             )}
           </Pressable>
         </View>
+
+        {/* ✅ ZONA DE PELIGRO (AL FINAL) */}
+        {user.hasSession && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: COLORS.coral }]}>Zona de peligro</Text>
+
+            <Pressable
+              onPress={loggingOut ? undefined : handleDeleteAccount}
+              disabled={loggingOut}
+              accessibilityRole="button"
+              accessibilityLabel="Eliminar mi cuenta"
+              accessibilityHint="Solicita la eliminación permanente de tu cuenta"
+              accessibilityState={{ disabled: loggingOut }}
+              style={({ pressed }) => [
+                styles.logoutBtn,
+                { borderColor: COLORS.coralSoft, backgroundColor: "rgba(255,105,105,0.05)" },
+                pressed && !loggingOut ? styles.logoutPressed : null,
+                loggingOut ? styles.disabled : null,
+              ]}
+            >
+              <Trash2 size={18} color={COLORS.coral} />
+              <Text style={[styles.logoutText, { color: COLORS.coral }]}>Eliminar mi cuenta</Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

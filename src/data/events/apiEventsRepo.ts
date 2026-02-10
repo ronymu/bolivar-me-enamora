@@ -4,6 +4,8 @@ import type { ID, Event } from "../../types/domain";
 import { getSupabase } from "../../lib/supabaseClient";
 import { adaptEventFromDb } from "../../adapters/eventAdapter";
 import { hydrateEventMediaRow } from "../../lib/mediaSigner";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SEEN_EVENTS_STORAGE_KEY } from "../../hooks/useSeenEvents";
 
 /**
  * Lista (Discover / listados)
@@ -85,6 +87,46 @@ function toSupabaseError(context: string, error: any) {
 // TTL recomendado para móvil: 1 hora
 const SIGN_TTL_SECONDS = 60 * 60;
 
+// 🔥 Interruptor maestro para DEV: muestra TODO (sin anti-zombie ni anti-seen)
+const IS_DEV_MODE_SHOW_ALL = __DEV__ ? false : false;
+
+// Si end_at viene null, asumimos “duración” por defecto para anti-zombie (MVP)
+const DEFAULT_DURATION_MS = 4 * 60 * 60 * 1000; // 4h
+const ZOMBIE_GRACE_MS = 0; // si quieres margen, pon 15 * 60 * 1000
+
+function parseMs(v: any): number | null {
+  if (!v) return null;
+  const ms = Date.parse(String(v));
+  return Number.isFinite(ms) ? ms : null;
+}
+
+async function loadSeenSet(): Promise<Set<string>> {
+  try {
+    const json = await AsyncStorage.getItem(SEEN_EVENTS_STORAGE_KEY);
+    if (!json) return new Set();
+    const arr = JSON.parse(json);
+    if (!Array.isArray(arr)) return new Set();
+    const ids = arr
+      .map((x: any) => String(x ?? "").trim())
+      .filter((x: string) => x.length > 0);
+    return new Set(ids);
+  } catch {
+    return new Set();
+  }
+}
+
+function isZombie(row: any, nowMs: number) {
+  const startMs = parseMs(row?.start_at);
+  const endMs = parseMs(row?.end_at);
+
+  if (!startMs && !endMs) return false;
+
+  const effectiveEnd = endMs ?? (startMs ? startMs + DEFAULT_DURATION_MS : null);
+  if (!effectiveEnd) return false;
+
+  return effectiveEnd + ZOMBIE_GRACE_MS < nowMs;
+}
+
 export const apiEventsRepo: EventsRepo = {
   async listEvents(): Promise<Event[]> {
     const supabase = getSupabase();
@@ -97,10 +139,31 @@ export const apiEventsRepo: EventsRepo = {
 
     if (error) throw toSupabaseError("listEvents", error);
 
-    const hydrated = await Promise.all((data ?? []).map((row) => hydrateEventMediaRow(row, SIGN_TTL_SECONDS)));
+    // ✅ Filtros (antes de firmar URLs, para ahorrar trabajo)
+    const nowMs = Date.now();
+
+    let rows = (data ?? []) as any[];
+
+    if (!IS_DEV_MODE_SHOW_ALL) {
+      // Anti-zombie
+      rows = rows.filter((r) => !isZombie(r, nowMs));
+
+      // Anti-repetidos (seen)
+      const seenSet = await loadSeenSet();
+      if (seenSet.size > 0) {
+        rows = rows.filter((r) => {
+          const id = String(r?.id ?? "").trim();
+          if (!id) return false;
+          return !seenSet.has(id);
+        });
+      }
+    }
+
+    const hydrated = await Promise.all(rows.map((row) => hydrateEventMediaRow(row, SIGN_TTL_SECONDS)));
 
     if (__DEV__) {
       const first = (hydrated ?? [])[0] as any;
+      console.log("[LIST] count:", hydrated?.length ?? 0);
       console.log("[LIST] first cover:", first?.cover_image_url);
       console.log("[LIST] first thumb:", first?.thumbnail_url);
       console.log("[LIST] first image_urls:", first?.image_urls);
