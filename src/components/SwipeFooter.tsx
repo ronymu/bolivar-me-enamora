@@ -1,5 +1,5 @@
 // src/components/SwipeFooter.tsx
-import React from "react";
+import React, { memo } from "react";
 import { StyleSheet, View, Pressable } from "react-native";
 import { X, Heart, RotateCcw } from "lucide-react-native";
 
@@ -17,7 +17,7 @@ type Props = {
   canUndo: boolean;
 };
 
-export default function SwipeFooter({ onNope, onLike, onUndo, canUndo }: Props) {
+function SwipeFooterBase({ onNope, onLike, onUndo, canUndo }: Props) {
   return (
     <View style={styles.wrap} pointerEvents="box-none" accessibilityRole="none">
       <Pressable
@@ -62,8 +62,20 @@ export default function SwipeFooter({ onNope, onLike, onUndo, canUndo }: Props) 
   );
 }
 
+// ✅ Memo: evita re-render si no cambian props
+export default memo(SwipeFooterBase, (prev, next) => {
+  return (
+    prev.canUndo === next.canUndo &&
+    prev.onNope === next.onNope &&
+    prev.onLike === next.onLike &&
+    prev.onUndo === next.onUndo
+  );
+});
+
 const styles = StyleSheet.create({
+  // ✅ Altura fija = no “empuja” layout mientras Swiper calcula cartas
   wrap: {
+    height: 76,
     flexDirection: "row",
     gap: 14,
     alignItems: "center",
