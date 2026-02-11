@@ -21,6 +21,8 @@ import {
   FileText,
   LogOut,
   User,
+  LogIn,
+  UserPlus,
   Trash2,
 } from "lucide-react-native";
 
@@ -140,9 +142,9 @@ export default function ProfileScreen({ navigation }: Props) {
   const user = useMemo(() => {
     const hasSession = !!authUser;
 
-    const name = hasSession ? pickName(profileRow) : "Sin sesión";
-    const email = hasSession ? (authUser?.email ?? "Sin email") : "Inicia sesión para ver tu cuenta";
-    const roleLabel = hasSession ? roleToLabel(profileRow?.role ?? "citizen") : "Visitante";
+    const name = hasSession ? pickName(profileRow) : "Visitante";
+    const email = hasSession ? (authUser?.email ?? "Sin email") : "Inicia sesión para guardar en la nube";
+    const roleLabel = hasSession ? roleToLabel(profileRow?.role ?? "citizen") : "Modo invitado";
 
     return {
       fullName: name,
@@ -154,11 +156,9 @@ export default function ProfileScreen({ navigation }: Props) {
   }, [authUser, profileRow]);
 
   const showComingSoon = () => {
-    Alert.alert(
-      "Próximamente",
-      "Esta función estará disponible en una próxima versión.",
-      [{ text: "Entendido", style: "cancel" }]
-    );
+    Alert.alert("Próximamente", "Esta función estará disponible en una próxima versión.", [
+      { text: "Entendido", style: "cancel" },
+    ]);
   };
 
   const quickActions: QuickAction[] = useMemo(
@@ -166,7 +166,7 @@ export default function ProfileScreen({ navigation }: Props) {
       {
         key: "myevents",
         title: "Mis eventos",
-        subtitle: "Tus guardados y planes",
+        subtitle: user.hasSession ? "Tus guardados y planes" : "Guardados en este dispositivo",
         icon: <CalendarHeart size={18} color={COLORS.text} />,
         onPress: () => navigation.navigate("MyEvents"),
       },
@@ -185,7 +185,7 @@ export default function ProfileScreen({ navigation }: Props) {
         disabled: true,
       },
     ],
-    [navigation]
+    [navigation, user.hasSession]
   );
 
   const rows: RowItem[] = useMemo(
@@ -217,7 +217,8 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const handleLogout = () => {
     if (!user.hasSession) {
-      Alert.alert("Sin sesión", "No hay un usuario activo para cerrar sesión.", [{ text: "OK" }]);
+      // ✅ Invitado: acción útil (no botón muerto)
+      navigation.navigate("Login");
       return;
     }
 
@@ -233,6 +234,7 @@ export default function ProfileScreen({ navigation }: Props) {
             try {
               setLoggingOut(true);
               await signOut();
+              navigation.reset({ index: 0, routes: [{ name: "Discover" }] });
             } catch (e: any) {
               Alert.alert("Error", e?.message ?? "No se pudo cerrar sesión. Intenta de nuevo.", [{ text: "OK" }]);
             } finally {
@@ -245,13 +247,8 @@ export default function ProfileScreen({ navigation }: Props) {
     );
   };
 
-  // ✅ NUEVO: handler honesto para Apple (MVP)
+  // ✅ Handler “honesto” para MVP (Apple compliance)
   const handleDeleteAccount = () => {
-    if (!user.hasSession) {
-      Alert.alert("Sin sesión", "Debes iniciar sesión para solicitar la eliminación de tu cuenta.", [{ text: "OK" }]);
-      return;
-    }
-
     Alert.alert(
       "Eliminar cuenta",
       "Esta acción solicitará el borrado permanente de tus datos. ¿Deseas continuar?",
@@ -263,24 +260,23 @@ export default function ProfileScreen({ navigation }: Props) {
           onPress: async () => {
             try {
               setLoggingOut(true);
-
-              // MVP: aquí luego irá una Edge Function (delete-account).
-              // Por ahora cerramos sesión y damos feedback honesto.
+              // FUTURO: supabase.functions.invoke("delete-account")
               await signOut();
+              navigation.reset({ index: 0, routes: [{ name: "Discover" }] });
 
               Alert.alert(
                 "Solicitud enviada",
                 "Hemos recibido tu solicitud. Tus datos serán eliminados permanentemente en un plazo de 72 horas."
               );
-            } catch (e: any) {
-              Alert.alert("Error", e?.message ?? "No se pudo procesar la solicitud. Intenta de nuevo.", [{ text: "OK" }]);
+            } catch {
+              // si falla, al menos quitamos loading
+              setLoggingOut(false);
             } finally {
               setLoggingOut(false);
             }
           },
         },
-      ],
-      { cancelable: true }
+      ]
     );
   };
 
@@ -334,6 +330,53 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
         </View>
 
+        {/* ✅ CTA INVITADO (evita botón muerto y el “ciclo”) */}
+        {!user.hasSession && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Cuenta</Text>
+
+            <View style={styles.block}>
+              <Pressable
+                onPress={() => navigation.navigate("Login")}
+                accessibilityRole="button"
+                accessibilityLabel="Iniciar sesión"
+                style={({ pressed }) => [styles.authRow, pressed ? styles.pressedRow : null]}
+              >
+                <View style={styles.navLeft}>
+                  <View style={styles.navIcon}>
+                    <LogIn size={18} color={COLORS.text} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.navTitle}>Iniciar sesión</Text>
+                    <Text style={styles.navSubtitle}>Sincroniza tus favoritos</Text>
+                  </View>
+                </View>
+                <ChevronRight size={18} color={COLORS.textSoft} />
+              </Pressable>
+
+              <View style={styles.divider} />
+
+              <Pressable
+                onPress={() => navigation.navigate("Signup")}
+                accessibilityRole="button"
+                accessibilityLabel="Crear cuenta"
+                style={({ pressed }) => [styles.authRow, pressed ? styles.pressedRow : null]}
+              >
+                <View style={styles.navLeft}>
+                  <View style={styles.navIcon}>
+                    <UserPlus size={18} color={COLORS.text} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.navTitle}>Crear cuenta</Text>
+                    <Text style={styles.navSubtitle}>Toma menos de 1 minuto</Text>
+                  </View>
+                </View>
+                <ChevronRight size={18} color={COLORS.textSoft} />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         {/* QUICK ACTIONS */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Accesos</Text>
@@ -367,7 +410,6 @@ export default function ProfileScreen({ navigation }: Props) {
           <Text style={styles.sectionTitle}>Preferencias</Text>
 
           <View style={styles.block}>
-            {/* Modo oscuro (placeholder real: disabled) */}
             <View style={styles.row}>
               <View style={styles.rowLeft}>
                 <Text style={styles.rowTitle}>Modo oscuro</Text>
@@ -388,7 +430,6 @@ export default function ProfileScreen({ navigation }: Props) {
 
             <View style={styles.divider} />
 
-            {/* Recordatorios (compartido con Notifications) */}
             <View style={styles.row}>
               <View style={styles.rowLeft}>
                 <Text style={styles.rowTitle}>Recordatorios</Text>
@@ -422,11 +463,7 @@ export default function ProfileScreen({ navigation }: Props) {
                   accessibilityLabel={r.title}
                   accessibilityHint={r.subtitle ?? "Abrir sección"}
                   accessibilityState={{ disabled: !!r.disabled }}
-                  style={({ pressed }) => [
-                    styles.navRow,
-                    r.disabled ? styles.disabled : null,
-                    pressed && !r.disabled ? styles.pressedRow : null,
-                  ]}
+                  style={({ pressed }) => [styles.navRow, r.disabled ? styles.disabled : null, pressed ? styles.pressedRow : null]}
                 >
                   <View style={styles.navLeft}>
                     <View style={styles.navIcon}>{r.leftIcon}</View>
@@ -447,52 +484,44 @@ export default function ProfileScreen({ navigation }: Props) {
           <Text style={styles.versionText}>Versión 0.1 • MVP</Text>
         </View>
 
-        {/* ✅ LOGOUT (AHORA VA ANTES DE ZONA DE PELIGRO) */}
+        {/* ✅ LOGOUT (más arriba que zona de peligro) */}
         <View style={styles.section}>
           <Pressable
             onPress={loggingOut ? undefined : handleLogout}
             accessibilityRole="button"
-            accessibilityLabel="Cerrar sesión"
-            accessibilityHint="Cierra la sesión actual"
-            accessibilityState={{ disabled: loggingOut || !user.hasSession }}
+            accessibilityLabel={user.hasSession ? "Cerrar sesión" : "Iniciar sesión"}
+            accessibilityHint={user.hasSession ? "Cierra la sesión actual" : "Abre la pantalla para iniciar sesión"}
+            accessibilityState={{ disabled: loggingOut }}
             style={({ pressed }) => [
               styles.logoutBtn,
               pressed && !loggingOut ? styles.logoutPressed : null,
-              loggingOut || !user.hasSession ? styles.disabled : null,
+              loggingOut ? styles.disabled : null,
             ]}
-            disabled={loggingOut || !user.hasSession}
+            disabled={loggingOut}
           >
-            <LogOut size={18} color={COLORS.text} />
+            {user.hasSession ? <LogOut size={18} color={COLORS.text} /> : <LogIn size={18} color={COLORS.text} />}
             <Text style={styles.logoutText}>
-              {!user.hasSession ? "Inicia sesión para salir" : loggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
+              {loggingOut ? "Procesando..." : user.hasSession ? "Cerrar sesión" : "Iniciar sesión"}
             </Text>
 
-            {loggingOut ? (
-              <ActivityIndicator style={{ marginLeft: "auto" }} />
-            ) : (
-              <Text style={styles.logoutHint}>{user.hasSession ? "Salir" : ""}</Text>
-            )}
+            {loggingOut ? <ActivityIndicator style={{ marginLeft: "auto" }} /> : <Text style={styles.logoutHint} />}
           </Pressable>
         </View>
 
-        {/* ✅ ZONA DE PELIGRO (AL FINAL) */}
+        {/* ✅ ZONA DE PELIGRO (solo logueados) */}
         {user.hasSession && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: COLORS.coral }]}>Zona de peligro</Text>
-
             <Pressable
-              onPress={loggingOut ? undefined : handleDeleteAccount}
-              disabled={loggingOut}
-              accessibilityRole="button"
-              accessibilityLabel="Eliminar mi cuenta"
-              accessibilityHint="Solicita la eliminación permanente de tu cuenta"
-              accessibilityState={{ disabled: loggingOut }}
+              onPress={handleDeleteAccount}
               style={({ pressed }) => [
                 styles.logoutBtn,
                 { borderColor: COLORS.coralSoft, backgroundColor: "rgba(255,105,105,0.05)" },
-                pressed && !loggingOut ? styles.logoutPressed : null,
-                loggingOut ? styles.disabled : null,
+                pressed ? styles.logoutPressed : null,
               ]}
+              accessibilityRole="button"
+              accessibilityLabel="Eliminar mi cuenta"
+              accessibilityHint="Solicita el borrado permanente de tu cuenta"
             >
               <Trash2 size={18} color={COLORS.coral} />
               <Text style={[styles.logoutText, { color: COLORS.coral }]}>Eliminar mi cuenta</Text>
@@ -554,10 +583,7 @@ const styles = StyleSheet.create({
   },
   roleText: { color: COLORS.text, fontSize: 12, fontWeight: "800" },
 
-  profileHint: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
+  profileHint: { fontSize: 12, fontWeight: "700" },
 
   section: { marginTop: 18 },
   sectionTitle: {
@@ -589,12 +615,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   quickTitle: { color: COLORS.text, fontSize: 13, fontWeight: "900" },
-  quickSubtitle: {
-    color: COLORS.textSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 4,
-  },
+  quickSubtitle: { color: COLORS.textSoft, fontSize: 12, fontWeight: "700", marginTop: 4 },
 
   block: {
     borderRadius: 22,
@@ -612,16 +633,18 @@ const styles = StyleSheet.create({
   },
   rowLeft: { flex: 1, paddingRight: 12 },
   rowTitle: { color: COLORS.text, fontSize: 13, fontWeight: "900" },
-  rowSubtitle: {
-    color: COLORS.textSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 2,
-  },
+  rowSubtitle: { color: COLORS.textSoft, fontSize: 12, fontWeight: "700", marginTop: 2 },
 
   divider: { height: 1, backgroundColor: "rgba(107,100,93,0.14)" },
 
   navRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  authRow: {
     paddingHorizontal: 14,
     paddingVertical: 14,
     flexDirection: "row",
@@ -640,19 +663,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   navTitle: { color: COLORS.text, fontSize: 13, fontWeight: "900" },
-  navSubtitle: {
-    color: COLORS.textSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 2,
-  },
+  navSubtitle: { color: COLORS.textSoft, fontSize: 12, fontWeight: "700", marginTop: 2 },
 
-  versionText: {
-    marginTop: 10,
-    color: COLORS.textSoft,
-    fontSize: 12,
-    fontWeight: "700",
-  },
+  versionText: { marginTop: 10, color: COLORS.textSoft, fontSize: 12, fontWeight: "700" },
 
   logoutBtn: {
     height: 54,
@@ -671,12 +684,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.995 }],
   },
   logoutText: { color: COLORS.text, fontSize: 13, fontWeight: "900" },
-  logoutHint: {
-    marginLeft: "auto",
-    color: COLORS.textSoft,
-    fontSize: 12,
-    fontWeight: "800",
-  },
+  logoutHint: { marginLeft: "auto", color: COLORS.textSoft, fontSize: 12, fontWeight: "800" },
 
   pressed: {
     borderColor: "rgba(255,105,105,0.55)",
