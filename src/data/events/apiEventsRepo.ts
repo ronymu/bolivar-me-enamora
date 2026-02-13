@@ -4,8 +4,6 @@ import type { ID, Event } from "../../types/domain";
 import { getSupabase } from "../../lib/supabaseClient";
 import { adaptEventFromDb } from "../../adapters/eventAdapter";
 import { hydrateEventMediaRow } from "../../lib/mediaSigner";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { SEEN_EVENTS_STORAGE_KEY } from "../../hooks/useSeenEvents";
 
 /**
  * Lista (Discover / listados)
@@ -87,32 +85,14 @@ function toSupabaseError(context: string, error: any) {
 // TTL recomendado para móvil: 1 hora
 const SIGN_TTL_SECONDS = 60 * 60;
 
-// 🔥 Interruptor maestro para DEV: muestra TODO (sin anti-zombie ni anti-seen)
-const IS_DEV_MODE_SHOW_ALL = __DEV__ ? false : false;
-
-// Si end_at viene null, asumimos “duración” por defecto para anti-zombie (MVP)
+// Si end_at viene null, asumimos duración por defecto para anti-zombie
 const DEFAULT_DURATION_MS = 4 * 60 * 60 * 1000; // 4h
-const ZOMBIE_GRACE_MS = 0; // si quieres margen, pon 15 * 60 * 1000
+const ZOMBIE_GRACE_MS = 0;
 
 function parseMs(v: any): number | null {
   if (!v) return null;
   const ms = Date.parse(String(v));
   return Number.isFinite(ms) ? ms : null;
-}
-
-async function loadSeenSet(): Promise<Set<string>> {
-  try {
-    const json = await AsyncStorage.getItem(SEEN_EVENTS_STORAGE_KEY);
-    if (!json) return new Set();
-    const arr = JSON.parse(json);
-    if (!Array.isArray(arr)) return new Set();
-    const ids = arr
-      .map((x: any) => String(x ?? "").trim())
-      .filter((x: string) => x.length > 0);
-    return new Set(ids);
-  } catch {
-    return new Set();
-  }
 }
 
 function isZombie(row: any, nowMs: number) {
@@ -139,27 +119,15 @@ export const apiEventsRepo: EventsRepo = {
 
     if (error) throw toSupabaseError("listEvents", error);
 
-    // ✅ Filtros (antes de firmar URLs, para ahorrar trabajo)
     const nowMs = Date.now();
-
     let rows = (data ?? []) as any[];
 
-    if (!IS_DEV_MODE_SHOW_ALL) {
-      // Anti-zombie
-      rows = rows.filter((r) => !isZombie(r, nowMs));
+    // ✅ Anti-zombie (filtra antes de firmar, ahorra trabajo)
+    rows = rows.filter((r) => !isZombie(r, nowMs));
 
-      // Anti-repetidos (seen)
-      const seenSet = await loadSeenSet();
-      if (seenSet.size > 0) {
-        rows = rows.filter((r) => {
-          const id = String(r?.id ?? "").trim();
-          if (!id) return false;
-          return !seenSet.has(id);
-        });
-      }
-    }
-
-    const hydrated = await Promise.all(rows.map((row) => hydrateEventMediaRow(row, SIGN_TTL_SECONDS)));
+    const hydrated = await Promise.all(
+      rows.map((row) => hydrateEventMediaRow(row, SIGN_TTL_SECONDS))
+    );
 
     if (__DEV__) {
       const first = (hydrated ?? [])[0] as any;

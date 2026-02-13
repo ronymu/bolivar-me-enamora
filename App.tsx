@@ -1,7 +1,9 @@
+// App.tsx
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as Linking from "expo-linking";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import AppNavigator from "./src/navigation/AppNavigator";
 import { FavoritesProvider } from "./src/context/FavoritesContext";
@@ -30,16 +32,18 @@ const linking = {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <EventsProvider>
-          <FavoritesProvider>
-            <NavigationContainer linking={linking}>
-              <AppNavigator />
-            </NavigationContainer>
-          </FavoritesProvider>
-        </EventsProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <EventsProvider>
+            <FavoritesProvider>
+              <NavigationContainer linking={linking}>
+                <AppNavigator />
+              </NavigationContainer>
+            </FavoritesProvider>
+          </EventsProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

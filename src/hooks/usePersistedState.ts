@@ -4,21 +4,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type Updater<T> = T | ((prev: T) => T);
 
-/**
- * Persisted state minimalista (MVP)
- * - Carga 1 vez al montar
- * - Guarda cada vez que cambia
- * - Evita setState si el componente se desmonta
- * - Soporta updater funcional (evita bugs al encadenar setState)
- */
 export function usePersistedState<T>(key: string, defaultValue: T) {
+  const safeKey = typeof key === "string" && key.trim().length > 0 ? key : null;
+
   const [value, _setValue] = useState<T>(defaultValue);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const isMounted = useRef(true);
   const valueRef = useRef<T>(defaultValue);
 
-  // Mantener ref alineada con el valor actual.
+  // escritura serializada (última gana)
+  const writeSeq = useRef(0);
+  const writeInFlight = useRef<Promise<void> | null>(null);
+
   useEffect(() => {
     valueRef.current = value;
   }, [value]);
@@ -28,7 +26,12 @@ export function usePersistedState<T>(key: string, defaultValue: T) {
 
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(key);
+        if (!safeKey) {
+          if (isMounted.current) setIsLoaded(true);
+          return;
+        }
+
+        const raw = await AsyncStorage.getItem(safeKey);
         if (raw != null) {
           const parsed = JSON.parse(raw) as T;
           if (isMounted.current) {
@@ -37,7 +40,6 @@ export function usePersistedState<T>(key: string, defaultValue: T) {
           }
         }
       } catch (e) {
-        // No rompemos UX por storage; log suave.
         console.warn(`[usePersistedState] load failed for "${key}"`, e);
       } finally {
         if (isMounted.current) setIsLoaded(true);
@@ -47,10 +49,10 @@ export function usePersistedState<T>(key: string, defaultValue: T) {
     return () => {
       isMounted.current = false;
     };
-  }, [key]);
+  }, [safeKey, key]);
 
   const setValue = useCallback(
-    async (next: Updater<T>) => {
+    (next: Updater<T>) => {
       const resolved =
         typeof next === "function"
           ? (next as (prev: T) => T)(valueRef.current)
@@ -59,13 +61,24 @@ export function usePersistedState<T>(key: string, defaultValue: T) {
       valueRef.current = resolved;
       _setValue(resolved);
 
-      try {
-        await AsyncStorage.setItem(key, JSON.stringify(resolved));
-      } catch (e) {
-        console.warn(`[usePersistedState] save failed for "${key}"`, e);
-      }
+      if (!safeKey) return;
+
+      const mySeq = ++writeSeq.current;
+
+      // si hay una escritura en vuelo, encadenamos
+      const run = async () => {
+        try {
+          // si alguien llamó setValue otra vez, esta escritura queda vieja y no debe pisar
+          if (mySeq !== writeSeq.current) return;
+          await AsyncStorage.setItem(safeKey, JSON.stringify(resolved));
+        } catch (e) {
+          console.warn(`[usePersistedState] save failed for "${key}"`, e);
+        }
+      };
+
+      writeInFlight.current = (writeInFlight.current ?? Promise.resolve()).then(run);
     },
-    [key]
+    [safeKey, key]
   );
 
   return { value, setValue, isLoaded } as const;
