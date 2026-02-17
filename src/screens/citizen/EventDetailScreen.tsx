@@ -18,10 +18,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Heart, MapPin, ExternalLink, User2 } from "lucide-react-native";
+import { ArrowLeft, Heart, MapPin, ExternalLink, User2, Share2 } from "lucide-react-native";
 
 import { useFavorites } from "../../context/FavoritesContext";
 import { useEvents } from "../../context/EventsContext";
+import { shareEvent } from "../../utils/shareUtils"; // ✅ Importamos la utilidad
 import type { RootScreenProps } from "../../navigation/navTypes";
 import { getEventImages, getMapAddress, getMapCoords, getOrganizer } from "../../adapters/eventAdapter";
 
@@ -51,8 +52,6 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { eventId } = route.params;
 
-  // OJO: esto asume que YA tienes hydrateById implementado en EventsContext.
-  // Si no lo tienes, dímelo y te paso el EventsContext completo.
   const { getById, hydrateById, isLoading: isListLoading } = useEvents();
   const [isHydrating, setIsHydrating] = useState(false);
 
@@ -107,8 +106,6 @@ export default function EventDetailScreen({ navigation, route }: Props) {
 
         <Pressable
           onPress={navigation.goBack}
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
           style={({ pressed }) => [styles.errorBtn, pressed ? styles.errorBtnPressed : null]}
         >
           <Text style={styles.errorBtnText}>Volver</Text>
@@ -128,10 +125,6 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   const { latitude: lat, longitude: lng } = getMapCoords(event);
   const images = useMemo(() => getEventImages(event), [event]);
 
-  if (__DEV__) {
-    console.log("[UI] organizer resolved:", organizer);
-  }
-
   return (
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
@@ -141,7 +134,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
         contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
       >
         {/* HERO */}
-        <View style={styles.hero} accessible accessibilityLabel={`Galería de imágenes de ${event.title}`}>
+        <View style={styles.hero}>
           <FlatList
             data={images}
             horizontal
@@ -174,13 +167,26 @@ export default function EventDetailScreen({ navigation, route }: Props) {
               <ArrowLeft size={22} color="white" />
             </Pressable>
 
-            <Pressable
-              style={styles.iconBtn}
-              onPress={() => (liked ? removeFavorite(event.id) : addFavorite(event.id))}
-              hitSlop={10}
-            >
-              <Heart size={22} color={liked ? COLORS.coral : "white"} fill={liked ? COLORS.coral : "transparent"} />
-            </Pressable>
+            {/* ✅ Grupo de acciones: Compartir y Favorito */}
+            <View style={styles.headerActions}>
+              <Pressable 
+                style={styles.iconBtn} 
+                onPress={() => shareEvent(event)} 
+                hitSlop={10}
+                accessibilityLabel="Compartir evento"
+              >
+                <Share2 size={20} color="white" />
+              </Pressable>
+
+              <Pressable
+                style={styles.iconBtn}
+                onPress={() => (liked ? removeFavorite(event.id) : addFavorite(event.id))}
+                hitSlop={10}
+                accessibilityLabel={liked ? "Quitar de favoritos" : "Añadir a favoritos"}
+              >
+                <Heart size={22} color={liked ? COLORS.coral : "white"} fill={liked ? COLORS.coral : "transparent"} />
+              </Pressable>
+            </View>
           </View>
         </View>
 
@@ -211,7 +217,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
             <View style={styles.divider} />
 
             {/* GESTOR */}
-            <View style={styles.block} accessible accessibilityLabel="Información del gestor">
+            <View style={styles.block}>
               <View style={styles.blockHeader}>
                 <User2 size={18} color={COLORS.text} />
                 <Text style={styles.blockTitle}>Gestor</Text>
@@ -226,20 +232,17 @@ export default function EventDetailScreen({ navigation, route }: Props) {
             <View style={styles.divider} />
 
             {/* COMO LLEGAR */}
-            <View style={styles.block} accessible accessibilityLabel="Cómo llegar">
+            <View style={styles.block}>
               <View style={styles.blockHeader}>
                 <MapPin size={18} color={COLORS.text} />
                 <Text style={styles.blockTitle}>Cómo llegar</Text>
               </View>
 
-              {/* ✅ FIX: dirección larga ya no se sale */}
               <Text style={styles.addressText}>{address}</Text>
 
               <Pressable
                 style={styles.mapBtn}
                 onPress={() => openMaps(address, lat, lng)}
-                accessibilityRole="button"
-                accessibilityLabel="Abrir en Maps"
               >
                 <ExternalLink size={14} color={COLORS.text} />
                 <Text style={styles.mapBtnText}>Abrir en Maps</Text>
@@ -282,6 +285,11 @@ const styles = StyleSheet.create({
     right: 16,
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: 12, // ✅ Espacio entre compartir y corazón
   },
 
   iconBtn: {
@@ -340,7 +348,6 @@ const styles = StyleSheet.create({
   blockPrimary: { fontSize: 14, fontWeight: "800", color: COLORS.text },
   blockSecondary: { fontSize: 13, color: COLORS.textSoft },
 
-  // ✅ FIX: envoltura y shrink para direcciones largas
   addressText: {
     fontSize: 13,
     color: COLORS.textSoft,

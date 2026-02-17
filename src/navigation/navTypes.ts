@@ -14,6 +14,7 @@ export type RootStackParamList = {
   MyEvents: undefined;
   Notifications: undefined;
   Profile: undefined;
+  EditProfile: undefined; // ✅ Añadido para la gestión de identidad
 };
 
 export type RootScreenProps<T extends keyof RootStackParamList> =

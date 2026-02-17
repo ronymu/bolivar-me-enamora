@@ -13,6 +13,7 @@ import EventDetailScreen from "../screens/citizen/EventDetailScreen";
 import MyEventsScreen from "../screens/citizen/MyEventsScreen";
 import NotificationsScreen from "../screens/citizen/NotificationsScreen";
 import ProfileScreen from "../screens/citizen/ProfileScreen";
+import EditProfileScreen from "../screens/citizen/EditProfileScreen"; // ✅ Importado
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -25,6 +26,7 @@ export default function AppNavigator() {
       <Stack.Screen name="MyEvents" component={MyEventsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: false }} /> 
 
       {/* ✅ AUTH (Accesible desde Profile) */}
       <Stack.Screen name="Login" component={LoginScreen} options={{ title: "Iniciar sesión" }} />

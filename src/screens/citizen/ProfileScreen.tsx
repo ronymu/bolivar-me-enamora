@@ -1,5 +1,5 @@
 // src/screens/citizen/ProfileScreen.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -24,12 +24,12 @@ import {
   LogIn,
   UserPlus,
   Trash2,
+  Edit2, // ✅ Añadido
 } from "lucide-react-native";
 
 import type { RootScreenProps } from "../../navigation/navTypes";
 import { useNotificationPrefs } from "../../hooks/useNotificationPrefs";
 import { useAuth } from "../../context/AuthContext";
-import { supabaseMobile } from "../../lib/supabaseMobileClient";
 
 const COLORS = {
   bg: "#F2F2F2",
@@ -61,15 +61,6 @@ type RowItem = {
   disabled?: boolean;
 };
 
-type ProfileRow = {
-  id: string;
-  role?: string | null;
-  display_name?: string | null;
-  full_name?: string | null;
-  organization_name?: string | null;
-  avatar_url?: string | null;
-};
-
 function roleToLabel(role?: string | null) {
   const r = String(role ?? "").toLowerCase().trim();
   if (r === "admin") return "Administrador";
@@ -78,82 +69,38 @@ function roleToLabel(role?: string | null) {
   return "Usuario";
 }
 
-function pickName(p?: ProfileRow | null) {
-  const dn = (p?.display_name ?? "").trim();
-  const fn = (p?.full_name ?? "").trim();
-  const org = (p?.organization_name ?? "").trim();
-  return dn || fn || org || "Usuario";
-}
-
 export default function ProfileScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { remindersEnabled, setRemindersEnabled } = useNotificationPrefs();
 
-  const { user: authUser, signOut } = useAuth();
+  // ✅ Extraemos el perfil y el estado de carga global del contexto
+  const { user: authUser, profile, loading: authLoading, signOut } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [profileRow, setProfileRow] = useState<ProfileRow | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-
-    async function loadProfile() {
-      const userId = authUser?.id;
-      if (!userId) {
-        setProfileRow(null);
-        setProfileError(null);
-        setProfileLoading(false);
-        return;
-      }
-
-      setProfileLoading(true);
-      setProfileError(null);
-
-      try {
-        const { data, error } = await supabaseMobile
-          .from("profiles")
-          .select("id, role, display_name, full_name, organization_name, avatar_url")
-          .eq("id", userId)
-          .maybeSingle();
-
-        if (error) throw new Error(error.message);
-
-        if (!alive) return;
-        setProfileRow((data as any) ?? null);
-      } catch (e: any) {
-        if (!alive) return;
-        setProfileRow(null);
-        setProfileError(e?.message ?? "No se pudo cargar el perfil.");
-      } finally {
-        if (!alive) return;
-        setProfileLoading(false);
-      }
-    }
-
-    loadProfile();
-
-    return () => {
-      alive = false;
-    };
-  }, [authUser?.id]);
-
+  // ✅ Memo simplificado: El nombre se resuelve con los datos globales
   const user = useMemo(() => {
     const hasSession = !!authUser;
 
-    const name = hasSession ? pickName(profileRow) : "Visitante";
-    const email = hasSession ? (authUser?.email ?? "Sin email") : "Inicia sesión para guardar en la nube";
-    const roleLabel = hasSession ? roleToLabel(profileRow?.role ?? "citizen") : "Modo invitado";
+    const name = hasSession 
+      ? (profile?.display_name || profile?.full_name || profile?.organization_name || "Usuario")
+      : "Visitante";
+      
+    const email = hasSession 
+      ? (authUser?.email ?? "Sin email") 
+      : "Inicia sesión para guardar en la nube";
+      
+    const roleLabel = hasSession 
+      ? roleToLabel(profile?.role) 
+      : "Modo invitado";
 
     return {
       fullName: name,
       email,
       roleLabel,
-      avatarUrl: profileRow?.avatar_url ?? null,
+      avatarUrl: profile?.avatar_url ?? null,
       hasSession,
     };
-  }, [authUser, profileRow]);
+  }, [authUser, profile]);
 
   const showComingSoon = () => {
     Alert.alert("Próximamente", "Esta función estará disponible en una próxima versión.", [
@@ -217,7 +164,6 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const handleLogout = () => {
     if (!user.hasSession) {
-      // ✅ Invitado: acción útil (no botón muerto)
       navigation.navigate("Login");
       return;
     }
@@ -247,7 +193,6 @@ export default function ProfileScreen({ navigation }: Props) {
     );
   };
 
-  // ✅ Handler “honesto” para MVP (Apple compliance)
   const handleDeleteAccount = () => {
     Alert.alert(
       "Eliminar cuenta",
@@ -260,7 +205,6 @@ export default function ProfileScreen({ navigation }: Props) {
           onPress: async () => {
             try {
               setLoggingOut(true);
-              // FUTURO: supabase.functions.invoke("delete-account")
               await signOut();
               navigation.reset({ index: 0, routes: [{ name: "Discover" }] });
 
@@ -269,7 +213,6 @@ export default function ProfileScreen({ navigation }: Props) {
                 "Hemos recibido tu solicitud. Tus datos serán eliminados permanentemente en un plazo de 72 horas."
               );
             } catch {
-              // si falla, al menos quitamos loading
               setLoggingOut(false);
             } finally {
               setLoggingOut(false);
@@ -304,33 +247,42 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
 
           <View style={{ flex: 1 }}>
-            <Text style={styles.name} numberOfLines={1}>
-              {user.fullName}
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {user.fullName}
+                </Text>
 
-            <Text style={styles.email} numberOfLines={1}>
-              {user.email}
-            </Text>
+                <Text style={styles.email} numberOfLines={1}>
+                  {user.email}
+                </Text>
+              </View>
+
+              {/* ✅ Botón de Editar Perfil: Solo visible si hay sesión */}
+              {user.hasSession && (
+                <Pressable
+                  onPress={() => navigation.navigate("EditProfile" as any)}
+                  style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.7 }]}
+                >
+                  <Edit2 size={16} color={COLORS.textSoft} />
+                </Pressable>
+              )}
+            </View>
 
             <View style={styles.rolePill}>
               <Text style={styles.roleText}>{user.roleLabel}</Text>
             </View>
 
-            {/* Estado perfil */}
-            {user.hasSession && profileLoading ? (
+            {/* ✅ Estado de carga: Ahora refleja la sincronización global del AuthContext */}
+            {user.hasSession && authLoading && (
               <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <ActivityIndicator />
-                <Text style={[styles.profileHint, { color: COLORS.textSoft }]}>Cargando perfil…</Text>
+                <ActivityIndicator size="small" color={COLORS.textSoft} />
+                <Text style={[styles.profileHint, { color: COLORS.textSoft }]}>Sincronizando perfil…</Text>
               </View>
-            ) : user.hasSession && profileError ? (
-              <Text style={[styles.profileHint, { color: COLORS.textSoft, marginTop: 10 }]}>
-                No se pudo cargar el rol/nombre. (Puedes seguir usando la app)
-              </Text>
-            ) : null}
+            )}
           </View>
         </View>
 
-        {/* ✅ CTA INVITADO (evita botón muerto y el “ciclo”) */}
         {!user.hasSession && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Cuenta</Text>
@@ -419,9 +371,6 @@ export default function ProfileScreen({ navigation }: Props) {
                 value={false}
                 onValueChange={() => {}}
                 disabled
-                accessibilityLabel="Modo oscuro"
-                accessibilityHint="Función próximamente"
-                accessibilityState={{ disabled: true }}
                 trackColor={{ false: "rgba(107,100,93,0.15)", true: COLORS.coralSoft }}
                 thumbColor="rgba(107,100,93,0.45)"
                 ios_backgroundColor="rgba(107,100,93,0.15)"
@@ -438,9 +387,6 @@ export default function ProfileScreen({ navigation }: Props) {
               <Switch
                 value={remindersEnabled}
                 onValueChange={setRemindersEnabled}
-                accessibilityLabel="Recordatorios"
-                accessibilityHint="Activa o desactiva recordatorios de eventos guardados"
-                accessibilityState={{ checked: remindersEnabled }}
                 trackColor={{ false: "rgba(107,100,93,0.25)", true: COLORS.coralSoft }}
                 thumbColor={remindersEnabled ? COLORS.coral : "rgba(107,100,93,0.65)"}
                 ios_backgroundColor="rgba(107,100,93,0.25)"
@@ -459,10 +405,6 @@ export default function ProfileScreen({ navigation }: Props) {
                 <Pressable
                   onPress={r.disabled ? undefined : r.onPress}
                   disabled={!!r.disabled}
-                  accessibilityRole="button"
-                  accessibilityLabel={r.title}
-                  accessibilityHint={r.subtitle ?? "Abrir sección"}
-                  accessibilityState={{ disabled: !!r.disabled }}
                   style={({ pressed }) => [styles.navRow, r.disabled ? styles.disabled : null, pressed ? styles.pressedRow : null]}
                 >
                   <View style={styles.navLeft}>
@@ -472,43 +414,35 @@ export default function ProfileScreen({ navigation }: Props) {
                       {r.subtitle ? <Text style={styles.navSubtitle}>{r.subtitle}</Text> : null}
                     </View>
                   </View>
-
                   <ChevronRight size={18} color={COLORS.textSoft} />
                 </Pressable>
-
                 {idx !== rows.length - 1 ? <View style={styles.divider} /> : null}
               </View>
             ))}
           </View>
-
-          <Text style={styles.versionText}>Versión 0.1 • MVP</Text>
+          <Text style={styles.versionText}>Versión 1.0 • Sprint: Identity</Text>
         </View>
 
-        {/* ✅ LOGOUT (más arriba que zona de peligro) */}
+        {/* LOGOUT */}
         <View style={styles.section}>
           <Pressable
             onPress={loggingOut ? undefined : handleLogout}
-            accessibilityRole="button"
-            accessibilityLabel={user.hasSession ? "Cerrar sesión" : "Iniciar sesión"}
-            accessibilityHint={user.hasSession ? "Cierra la sesión actual" : "Abre la pantalla para iniciar sesión"}
-            accessibilityState={{ disabled: loggingOut }}
+            disabled={loggingOut}
             style={({ pressed }) => [
               styles.logoutBtn,
               pressed && !loggingOut ? styles.logoutPressed : null,
               loggingOut ? styles.disabled : null,
             ]}
-            disabled={loggingOut}
           >
             {user.hasSession ? <LogOut size={18} color={COLORS.text} /> : <LogIn size={18} color={COLORS.text} />}
             <Text style={styles.logoutText}>
               {loggingOut ? "Procesando..." : user.hasSession ? "Cerrar sesión" : "Iniciar sesión"}
             </Text>
-
-            {loggingOut ? <ActivityIndicator style={{ marginLeft: "auto" }} /> : <Text style={styles.logoutHint} />}
+            {loggingOut && <ActivityIndicator style={{ marginLeft: "auto" }} />}
           </Pressable>
         </View>
 
-        {/* ✅ ZONA DE PELIGRO (solo logueados) */}
+        {/* ZONA DE PELIGRO */}
         {user.hasSession && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: COLORS.coral }]}>Zona de peligro</Text>
@@ -519,9 +453,6 @@ export default function ProfileScreen({ navigation }: Props) {
                 { borderColor: COLORS.coralSoft, backgroundColor: "rgba(255,105,105,0.05)" },
                 pressed ? styles.logoutPressed : null,
               ]}
-              accessibilityRole="button"
-              accessibilityLabel="Eliminar mi cuenta"
-              accessibilityHint="Solicita el borrado permanente de tu cuenta"
             >
               <Trash2 size={18} color={COLORS.coral} />
               <Text style={[styles.logoutText, { color: COLORS.coral }]}>Eliminar mi cuenta</Text>
@@ -570,6 +501,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     marginTop: 2,
+  },
+  editBtn: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(107,100,93,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(107,100,93,0.1)",
   },
   rolePill: {
     marginTop: 10,
