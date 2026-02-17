@@ -15,6 +15,7 @@ import { useSeenEvents } from "../../hooks/useSeenEvents";
 import { useFavorites } from "../../context/FavoritesContext";
 import { useAuth } from "../../context/AuthContext";
 import { getOptimizedImageUrl } from "../../utils/imageUtils";
+import { resolveSignedUrl } from "../../lib/mediaSigner"; // ✅ Importado
 import type { RootScreenProps } from "../../navigation/navTypes";
 import type { Event } from "../../types/domain";
 
@@ -28,8 +29,11 @@ export default function DiscoverScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { events, isLoading, error } = useEvents();
   const { addFavorite } = useFavorites();
-  const { user } = useAuth();
+  const { user, profile } = useAuth(); // ✅ Extraemos profile también
   const { seenIds, isLoaded: seenLoaded, markAsSeen } = useSeenEvents(user?.id ?? "guest");
+
+  // ✅ Estado para el avatar firmado
+  const [signedAvatar, setSignedAvatar] = useState<string | null>(null);
 
   const data = useMemo<Event[]>(() => {
     const list = Array.isArray(events) ? events : [];
@@ -48,6 +52,23 @@ export default function DiscoverScreen({ navigation }: Props) {
   const [reqLeft, setReqLeft] = useState(false);
   const [reqRight, setReqRight] = useState(false);
   const [reqUndo, setReqUndo] = useState(false);
+
+  // ✅ Efecto para firmar el avatar cuando cambie el perfil
+  useEffect(() => {
+    let alive = true;
+    if (profile?.avatar_url) {
+      resolveSignedUrl(profile.avatar_url, 3600, { bucket: "avatars", retryOnce: true })
+        .then((url) => {
+          if (alive) setSignedAvatar(url);
+        })
+        .catch(() => {
+          if (alive) setSignedAvatar(null);
+        });
+    } else {
+      setSignedAvatar(null);
+    }
+    return () => { alive = false; };
+  }, [profile?.avatar_url]);
 
   const extractUrl = (event: Event | undefined) => {
     if (!event) return null;
@@ -124,8 +145,19 @@ export default function DiscoverScreen({ navigation }: Props) {
           <Pressable onPress={() => navigation.navigate("Notifications")} style={styles.iconBtn}>
             <Bell size={22} color="white" />
           </Pressable>
+
+          {/* ✅ Botón de perfil con Avatar dinámico */}
           <Pressable onPress={() => navigation.navigate("Profile")} style={styles.iconBtn}>
-            <User size={22} color="white" />
+            {signedAvatar ? (
+              <Image 
+                source={{ uri: signedAvatar }} 
+                style={styles.avatarMini} 
+                contentFit="cover"
+                transition={200}
+              />
+            ) : (
+              <User size={22} color="white" />
+            )}
           </Pressable>
         </View>
 
@@ -215,6 +247,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.22)",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden", // ✅ Necesario para que el avatar respete el radio
+  },
+  avatarMini: {
+    width: "100%",
+    height: "100%",
   },
 
   loadingState: { flex: 1, alignItems: "center", justifyContent: "center" },

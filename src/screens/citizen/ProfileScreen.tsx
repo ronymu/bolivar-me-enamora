@@ -1,5 +1,5 @@
 // src/screens/citizen/ProfileScreen.tsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Image } from "expo-image"; // ✅ Importado para alto rendimiento
 import {
   Bell,
   CalendarHeart,
@@ -24,12 +25,13 @@ import {
   LogIn,
   UserPlus,
   Trash2,
-  Edit2, // ✅ Añadido
+  Edit2,
 } from "lucide-react-native";
 
 import type { RootScreenProps } from "../../navigation/navTypes";
 import { useNotificationPrefs } from "../../hooks/useNotificationPrefs";
 import { useAuth } from "../../context/AuthContext";
+import { resolveSignedUrl } from "../../lib/mediaSigner"; // ✅ Importado para firmar la URL
 
 const COLORS = {
   bg: "#F2F2F2",
@@ -73,11 +75,29 @@ export default function ProfileScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { remindersEnabled, setRemindersEnabled } = useNotificationPrefs();
 
-  // ✅ Extraemos el perfil y el estado de carga global del contexto
   const { user: authUser, profile, loading: authLoading, signOut } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
+  
+  // ✅ Estado para la URL firmada del avatar
+  const [signedAvatar, setSignedAvatar] = useState<string | null>(null);
 
-  // ✅ Memo simplificado: El nombre se resuelve con los datos globales
+  // ✅ Efecto para resolver la firma del avatar del bucket 'avatars'
+  useEffect(() => {
+    let alive = true;
+    if (profile?.avatar_url) {
+      resolveSignedUrl(profile.avatar_url, 3600, { bucket: "avatars", retryOnce: true })
+        .then((url) => {
+          if (alive) setSignedAvatar(url);
+        })
+        .catch(() => {
+          if (alive) setSignedAvatar(null);
+        });
+    } else {
+      setSignedAvatar(null);
+    }
+    return () => { alive = false; };
+  }, [profile?.avatar_url]);
+
   const user = useMemo(() => {
     const hasSession = !!authUser;
 
@@ -97,7 +117,6 @@ export default function ProfileScreen({ navigation }: Props) {
       fullName: name,
       email,
       roleLabel,
-      avatarUrl: profile?.avatar_url ?? null,
       hasSession,
     };
   }, [authUser, profile]);
@@ -242,8 +261,18 @@ export default function ProfileScreen({ navigation }: Props) {
           accessible
           accessibilityLabel={`Usuario: ${user.fullName}. Email: ${user.email}. Rol: ${user.roleLabel}.`}
         >
+          {/* ✅ CONTENEDOR DE AVATAR ACTUALIZADO */}
           <View style={styles.avatar}>
-            <User size={22} color={COLORS.text} />
+            {signedAvatar ? (
+              <Image 
+                source={{ uri: signedAvatar }} 
+                style={styles.avatarImage} 
+                contentFit="cover"
+                transition={200}
+              />
+            ) : (
+              <User size={22} color={COLORS.text} />
+            )}
           </View>
 
           <View style={{ flex: 1 }}>
@@ -258,7 +287,6 @@ export default function ProfileScreen({ navigation }: Props) {
                 </Text>
               </View>
 
-              {/* ✅ Botón de Editar Perfil: Solo visible si hay sesión */}
               {user.hasSession && (
                 <Pressable
                   onPress={() => navigation.navigate("EditProfile" as any)}
@@ -273,7 +301,6 @@ export default function ProfileScreen({ navigation }: Props) {
               <Text style={styles.roleText}>{user.roleLabel}</Text>
             </View>
 
-            {/* ✅ Estado de carga: Ahora refleja la sincronización global del AuthContext */}
             {user.hasSession && authLoading && (
               <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <ActivityIndicator size="small" color={COLORS.textSoft} />
@@ -290,8 +317,6 @@ export default function ProfileScreen({ navigation }: Props) {
             <View style={styles.block}>
               <Pressable
                 onPress={() => navigation.navigate("Login")}
-                accessibilityRole="button"
-                accessibilityLabel="Iniciar sesión"
                 style={({ pressed }) => [styles.authRow, pressed ? styles.pressedRow : null]}
               >
                 <View style={styles.navLeft}>
@@ -310,8 +335,6 @@ export default function ProfileScreen({ navigation }: Props) {
 
               <Pressable
                 onPress={() => navigation.navigate("Signup")}
-                accessibilityRole="button"
-                accessibilityLabel="Crear cuenta"
                 style={({ pressed }) => [styles.authRow, pressed ? styles.pressedRow : null]}
               >
                 <View style={styles.navLeft}>
@@ -339,10 +362,6 @@ export default function ProfileScreen({ navigation }: Props) {
                 key={item.key}
                 onPress={item.disabled ? undefined : item.onPress}
                 disabled={!!item.disabled}
-                accessibilityRole="button"
-                accessibilityLabel={item.title}
-                accessibilityHint={item.subtitle}
-                accessibilityState={{ disabled: !!item.disabled }}
                 style={({ pressed }) => [
                   styles.quickCard,
                   item.disabled ? styles.disabled : null,
@@ -494,6 +513,11 @@ const styles = StyleSheet.create({
     borderColor: "rgba(107,100,93,0.14)",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden", // ✅ Importante para que la imagen no se salga de los bordes redondeados
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   name: { color: COLORS.text, fontSize: 16, fontWeight: "900" },
   email: {

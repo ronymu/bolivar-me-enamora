@@ -21,7 +21,7 @@ function normalizeMaybePath(s: unknown): string | null {
   if (typeof s !== "string") return null;
   const v = s.trim();
   if (!v) return null;
-  return v; // puede ser http o path; lo decidimos después
+  return v; 
 }
 
 /**
@@ -29,32 +29,35 @@ function normalizeMaybePath(s: unknown): string | null {
  */
 const DEFAULT_STALE_MS = 5 * 60 * 1000; // 5 min
 
-async function signOnePath(path: string, ttlSeconds: number): Promise<string> {
+async function signOnePath(path: string, ttlSeconds: number, bucket: string): Promise<string> {
   const supabase = getSupabase();
-  const { data, error } = await supabase.storage.from("events").createSignedUrl(path, ttlSeconds);
+  // ✅ Ahora dinámico según el bucket pasado
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, ttlSeconds);
 
   if (error || !data?.signedUrl) {
-    throw new Error(error?.message ?? "createSignedUrl failed");
+    throw new Error(error?.message ?? `createSignedUrl failed for bucket: ${bucket}`);
   }
 
   return data.signedUrl;
 }
 
-async function signWithCache(path: string, ttlSeconds: number, staleMs = DEFAULT_STALE_MS) {
-  const cached = cache.get(path);
+async function signWithCache(path: string, ttlSeconds: number, bucket: string, staleMs = DEFAULT_STALE_MS) {
+  // ✅ El cache key ahora incluye el bucket para evitar colisiones si hay paths iguales en distintos buckets
+  const cacheKey = `${bucket}:${path}`;
+  const cached = cache.get(cacheKey);
+
   if (cached) {
     const remaining = cached.expiresAt - nowMs();
     if (remaining > staleMs) return cached.url;
   }
 
-  const signedUrl = await signOnePath(path, ttlSeconds);
-  // guardamos expiración aproximada (TTL exacto)
-  cache.set(path, { url: signedUrl, expiresAt: nowMs() + ttlSeconds * 1000 });
+  const signedUrl = await signOnePath(path, ttlSeconds, bucket);
+  cache.set(cacheKey, { url: signedUrl, expiresAt: nowMs() + ttlSeconds * 1000 });
   return signedUrl;
 }
 
 /**
- * Pool simple para limitar concurrencia (evita “picos” con galerías grandes).
+ * Pool simple para limitar concurrencia
  */
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -79,35 +82,34 @@ async function mapWithConcurrency<T, R>(
 export async function resolveSignedUrl(
   pathOrUrl: unknown,
   ttlSeconds: number,
-  opts?: { staleMs?: number; retryOnce?: boolean }
+  opts?: { staleMs?: number; retryOnce?: boolean; bucket?: string } // ✅ Bucket opcional
 ): Promise<string | null> {
   const v = normalizeMaybePath(pathOrUrl);
   if (!v) return null;
 
-  // Si ya es URL (legacy o ya firmada), no tocamos.
   if (isHttpUrl(v)) return v;
 
+  const targetBucket = opts?.bucket ?? "events"; // Default a "events"
+
   try {
-    return await signWithCache(v, ttlSeconds, opts?.staleMs ?? DEFAULT_STALE_MS);
+    return await signWithCache(v, ttlSeconds, targetBucket, opts?.staleMs ?? DEFAULT_STALE_MS);
   } catch (e) {
-    // reintento 1 vez (por flakiness de red)
     if (opts?.retryOnce) {
       try {
-        // limpiamos cache por si estaba corrupta
-        cache.delete(v);
-        return await signWithCache(v, ttlSeconds, opts?.staleMs ?? DEFAULT_STALE_MS);
+        cache.delete(`${targetBucket}:${v}`);
+        return await signWithCache(v, ttlSeconds, targetBucket, opts?.staleMs ?? DEFAULT_STALE_MS);
       } catch {
-        return v; // devolvemos path para debug
+        return v; 
       }
     }
-    return v; // devolvemos path para debug
+    return v; 
   }
 }
 
 export async function resolveSignedUrls(
   pathsOrUrls: unknown[],
   ttlSeconds: number,
-  opts?: { concurrency?: number; staleMs?: number; retryOnce?: boolean }
+  opts?: { concurrency?: number; staleMs?: number; retryOnce?: boolean; bucket?: string } // ✅ Bucket opcional
 ): Promise<string[]> {
   const clean = (pathsOrUrls ?? [])
     .map(normalizeMaybePath)
@@ -116,14 +118,15 @@ export async function resolveSignedUrls(
   if (!clean.length) return [];
 
   const concurrency = opts?.concurrency ?? 6;
+  const targetBucket = opts?.bucket ?? "events";
 
   return mapWithConcurrency(clean, concurrency, async (v) => {
-    // http se devuelve tal cual, path se firma con cache
     if (isHttpUrl(v)) return v;
 
     const url = await resolveSignedUrl(v, ttlSeconds, {
       staleMs: opts?.staleMs,
       retryOnce: opts?.retryOnce ?? true,
+      bucket: targetBucket,
     });
 
     return url ?? v;
@@ -131,18 +134,17 @@ export async function resolveSignedUrls(
 }
 
 /**
- * Helper para “hidratar” una fila de events:
- * - cover_image_url
- * - thumbnail_url
- * - image_urls[]
+ * Helper para “hidratar” una fila de events
  */
 export async function hydrateEventMediaRow(row: any, ttlSeconds: number) {
+  // Para eventos forzamos bucket "events" explícitamente por seguridad
   const [cover, thumb, gallery] = await Promise.all([
-    resolveSignedUrl(row?.cover_image_url, ttlSeconds, { retryOnce: true }),
-    resolveSignedUrl(row?.thumbnail_url, ttlSeconds, { retryOnce: true }),
+    resolveSignedUrl(row?.cover_image_url, ttlSeconds, { retryOnce: true, bucket: "events" }),
+    resolveSignedUrl(row?.thumbnail_url, ttlSeconds, { retryOnce: true, bucket: "events" }),
     resolveSignedUrls(Array.isArray(row?.image_urls) ? row.image_urls : [], ttlSeconds, {
       concurrency: 6,
       retryOnce: true,
+      bucket: "events",
     }),
   ]);
 
