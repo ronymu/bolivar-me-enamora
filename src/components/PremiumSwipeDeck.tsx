@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { StyleSheet, View, Dimensions } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -17,6 +17,7 @@ export type PremiumSwipeDeckProps<T> = {
   stackSize?: number;
   onSwipedLeft?: (index: number) => void;
   onSwipedRight?: (index: number) => void;
+  onSwipeUp?: (index: number) => void;
   onIndexChange?: (nextIndex: number) => void;
   requestSwipeLeft?: boolean;
   requestSwipeRight?: boolean;
@@ -24,18 +25,27 @@ export type PremiumSwipeDeckProps<T> = {
   onConsumeRequests?: () => void;
 };
 
-function PremiumSwipeDeckBase<T extends { id: string | number }>({
-  data,
-  renderCard,
-  stackSize = 3,
-  onSwipedLeft,
-  onSwipedRight,
-  onIndexChange,
-  requestSwipeLeft,
-  requestSwipeRight,
-  requestUndo,
-  onConsumeRequests,
-}: PremiumSwipeDeckProps<T>) {
+export interface PremiumSwipeDeckRef {
+  resetActiveCard: () => void;
+}
+
+function PremiumSwipeDeckBase<T extends { id: string | number }>(
+  props: PremiumSwipeDeckProps<T>,
+  ref: React.Ref<PremiumSwipeDeckRef>
+) {
+  const {
+    data,
+    renderCard,
+    stackSize = 3,
+    onSwipedLeft,
+    onSwipedRight,
+    onSwipeUp,
+    onIndexChange,
+    requestSwipeLeft,
+    requestSwipeRight,
+    requestUndo,
+    onConsumeRequests,
+  } = props;
   const safeData = Array.isArray(data) ? data : [];
   const [index, setIndex] = useState(0);
   const historyRef = useRef<number[]>([]);
@@ -72,6 +82,13 @@ function PremiumSwipeDeckBase<T extends { id: string | number }>({
     else onSwipedRight?.(cur);
   }, [index, safeData.length, onIndexChange, onSwipedLeft, onSwipedRight]); // Quitamos swipeX de dependencias
 
+  const onCardSwipeUp = useCallback(() => {
+    if (index < safeData.length) {
+      onSwipeUp?.(index);
+    }
+    // No avanzamos de carta, solo notificamos
+  }, [index, onSwipeUp, safeData.length]);
+
   const doUndo = useCallback(() => {
     const prev = historyRef.current.pop();
     if (prev == null) return;
@@ -80,6 +97,12 @@ function PremiumSwipeDeckBase<T extends { id: string | number }>({
     setIndex(prev);
     onIndexChange?.(prev);
   }, [onIndexChange, reportedSwipeX]);
+
+  useImperativeHandle(ref, () => ({
+    resetActiveCard: () => {
+      activeCardRef.current?.resetPosition();
+    },
+  }));
 
   useEffect(() => {
     if (!onConsumeRequests) return;
@@ -113,6 +136,7 @@ function PremiumSwipeDeckBase<T extends { id: string | number }>({
               ref={activeCardRef}
               onSwipeComplete={goNext}
               reportSwipeX={reportedSwipeX} // Pasamos el reportero
+              onSwipeUp={onCardSwipeUp}
             >
               {renderCard(item)}
             </ActiveCard>
@@ -190,5 +214,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const PremiumSwipeDeck = memo(PremiumSwipeDeckBase) as typeof PremiumSwipeDeckBase;
+// The 'as any' is a concession to the complexity of typing HOCs with generics.
+const PremiumSwipeDeck = memo(forwardRef(PremiumSwipeDeckBase)) as any;
+
 export default PremiumSwipeDeck;

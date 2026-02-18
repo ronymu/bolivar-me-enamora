@@ -1,5 +1,5 @@
 // src/lib/mediaSigner.ts
-import { getSupabase } from "./supabaseClient";
+import { supabaseMobile } from "./supabaseMobileClient";
 
 type CacheEntry = {
   url: string;
@@ -30,7 +30,7 @@ function normalizeMaybePath(s: unknown): string | null {
 const DEFAULT_STALE_MS = 5 * 60 * 1000; // 5 min
 
 async function signOnePath(path: string, ttlSeconds: number, bucket: string): Promise<string> {
-  const supabase = getSupabase();
+  const supabase = supabaseMobile;
   // ✅ Ahora dinámico según el bucket pasado
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, ttlSeconds);
 

@@ -1,14 +1,15 @@
 // src/screens/citizen/DiscoverScreen.tsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { StyleSheet, View, ActivityIndicator, Pressable, Text, StatusBar } from "react-native";
 import { Image } from "expo-image";
 import { Bell, User } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "@react-navigation/native";
 
 import EventCard from "../../components/EventCard";
 import SwipeFooter from "../../components/SwipeFooter";
-import PremiumSwipeDeck from "../../components/PremiumSwipeDeck";
+import PremiumSwipeDeck, { PremiumSwipeDeckRef } from "../../components/PremiumSwipeDeck";
 
 import { useEvents } from "../../context/EventsContext";
 import { useSeenEvents } from "../../hooks/useSeenEvents";
@@ -31,6 +32,7 @@ export default function DiscoverScreen({ navigation }: Props) {
   const { addFavorite } = useFavorites();
   const { user, profile } = useAuth(); // ✅ Extraemos profile también
   const { seenIds, isLoaded: seenLoaded, markAsSeen } = useSeenEvents(user?.id ?? "guest");
+  const deckRef = useRef<PremiumSwipeDeckRef>(null);
 
   // ✅ Estado para el avatar firmado
   const [signedAvatar, setSignedAvatar] = useState<string | null>(null);
@@ -115,6 +117,23 @@ export default function DiscoverScreen({ navigation }: Props) {
     [addFavorite, data, markAsSeen, computePrefetch]
   );
 
+  const handleSwipeUp = useCallback(
+    (cardIndex: number) => {
+      const event = data[cardIndex];
+      if (event) {
+        navigation.navigate("EventDetail", { eventId: event.id });
+      }
+    },
+    [data, navigation]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      // Cuando la pantalla vuelve a tener foco (ej. al volver de Detail), resetea la posición de la tarjeta.
+      deckRef.current?.resetActiveCard();
+    }, [])
+  );
+
   const showFooter = !isLoading && !error && deckVisible && currentIndex < data.length;
 
   return (
@@ -181,6 +200,7 @@ export default function DiscoverScreen({ navigation }: Props) {
         ) : (
           <View style={styles.deckWrap} pointerEvents="box-none">
             <PremiumSwipeDeck
+              ref={deckRef}
               data={data}
               stackSize={3}
               swipeThreshold={120}
@@ -190,6 +210,7 @@ export default function DiscoverScreen({ navigation }: Props) {
               }}
               onSwipedLeft={(idx) => onSwiped(idx, "left")}
               onSwipedRight={(idx) => onSwiped(idx, "right")}
+              onSwipeUp={handleSwipeUp}
               renderCard={(event) => (
                 <EventCard
                   eventId={event.id}

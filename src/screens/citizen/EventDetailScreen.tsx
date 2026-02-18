@@ -7,7 +7,6 @@ import {
   Pressable,
   Dimensions,
   FlatList,
-  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Animated,
@@ -17,6 +16,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Heart, MapPin, ExternalLink, User2, Share2 } from "lucide-react-native";
 
@@ -24,6 +24,7 @@ import { useFavorites } from "../../context/FavoritesContext";
 import { useEvents } from "../../context/EventsContext";
 import { shareEvent } from "../../utils/shareUtils"; // ✅ Importamos la utilidad
 import type { RootScreenProps } from "../../navigation/navTypes";
+import { getOptimizedImageUrl } from "../../utils/imageUtils";
 import { getEventImages, getMapAddress, getMapCoords, getOrganizer } from "../../adapters/eventAdapter";
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
@@ -57,6 +58,9 @@ export default function EventDetailScreen({ navigation, route }: Props) {
 
   const event = useMemo(() => getById(eventId), [getById, eventId]);
 
+  // Flag to determine if the full gallery data has been loaded from the backend.
+  const isGalleryReady = useMemo(() => !!(event?.images && event.images.length > 0), [event]);
+
   useEffect(() => {
     let alive = true;
 
@@ -80,6 +84,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   const [index, setIndex] = useState(0);
 
   const fade = useRef(new Animated.Value(0)).current;
+  const heroContentOpacity = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(14)).current;
 
   useEffect(() => {
@@ -88,6 +93,17 @@ export default function EventDetailScreen({ navigation, route }: Props) {
       Animated.timing(slide, { toValue: 0, duration: 200, useNativeDriver: true }),
     ]).start();
   }, [fade, slide]);
+
+  useEffect(() => {
+    // Animate the hero content in only when the gallery data is actually ready.
+    if (isGalleryReady) {
+      Animated.timing(heroContentOpacity, {
+        toValue: 1,
+        duration: 300, // Match image transition for smoothness
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isGalleryReady, heroContentOpacity]);
 
   if (!event && (isListLoading || isHydrating)) {
     return (
@@ -135,31 +151,42 @@ export default function EventDetailScreen({ navigation, route }: Props) {
       >
         {/* HERO */}
         <View style={styles.hero}>
-          <FlatList
-            data={images}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={onMomentumEnd}
-            keyExtractor={(_, i) => `${event.id}-${i}`}
-            renderItem={({ item }) => (
-              <View style={styles.heroSlide}>
-                <Image source={item} style={styles.heroImage} resizeMode="cover" fadeDuration={0} />
-                <LinearGradient
-                  colors={["rgba(0,0,0,0.2)", "transparent", "rgba(0,0,0,0.6)"]}
-                  style={StyleSheet.absoluteFill}
-                  pointerEvents="none"
-                />
-              </View>
-            )}
-          />
+          {/* Render the gallery only when the full data is available to prevent flickering the cover image. */}
+          {isGalleryReady ? (
+            <Animated.View style={{ flex: 1, opacity: heroContentOpacity }}>
+              <FlatList
+                data={images}
+                horizontal
+                pagingEnabled
+                scrollEnabled={images.length > 1}
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={onMomentumEnd}
+                keyExtractor={(_, i) => `${event.id}-${i}`}
+                renderItem={({ item }) => (
+                  <View style={styles.heroSlide}>
+                    <Image
+                      source={item}
+                      style={styles.heroImage}
+                      contentFit="cover"
+                      transition={300}
+                    />
+                  </View>
+                )}
+              />
+              <LinearGradient
+                colors={["rgba(0,0,0,0.2)", "transparent", "rgba(0,0,0,0.6)"]}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+              />
+            </Animated.View>
+          ) : null}
 
-          {images.length > 1 && (
-            <View pointerEvents="none" style={[styles.dotsRow, { bottom: OVERLAP + 18 }]}>
+          {isGalleryReady && images.length > 1 && (
+            <Animated.View pointerEvents="none" style={[styles.dotsRow, { bottom: OVERLAP + 18, opacity: heroContentOpacity }]}>
               {images.map((_, i) => (
                 <View key={`${event.id}-dot-${i}`} style={[styles.dot, i === index ? styles.dotActive : null]} />
               ))}
-            </View>
+            </Animated.View>
           )}
 
           <View style={[styles.header, { top: insets.top + 10 }]}>
@@ -275,8 +302,8 @@ const styles = StyleSheet.create({
   errorBtnPressed: { backgroundColor: COLORS.coralSoft, borderColor: "rgba(255,105,105,0.55)" },
   errorBtnText: { color: COLORS.text, fontWeight: "900" },
 
-  hero: { height: HERO_H, backgroundColor: "black" },
-  heroSlide: { width: SCREEN_W, height: HERO_H, backgroundColor: "black" },
+  hero: { height: HERO_H, backgroundColor: "#E1E1E1" },
+  heroSlide: { width: SCREEN_W, height: HERO_H, backgroundColor: "#E1E1E1" },
   heroImage: { width: SCREEN_W, height: HERO_H },
 
   header: {

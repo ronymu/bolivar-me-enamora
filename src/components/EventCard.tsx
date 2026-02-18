@@ -33,10 +33,6 @@ function EventCard({ title, description, image, chips, eventId, priority = "norm
 
   const contentPaddingBottom = BASE_PADDING + insets.bottom + FOOTER_RESERVED_SPACE;
 
-  const goToDetail = () => {
-    navigation.navigate("EventDetail", { eventId });
-  };
-
   const { mainSource, placeholderSource } = useMemo((): {
     mainSource: ImageSource;
     placeholderSource?: ImageSource;
@@ -85,8 +81,7 @@ function EventCard({ title, description, image, chips, eventId, priority = "norm
 
       {/* ✅ Tap solo en la parte inferior para no pelear con el gesto de swipe */}
       <Pressable
-        onPress={goToDetail}
-        accessibilityRole="button"
+        accessibilityRole="none" // El rol de botón ahora está en el contenedor del gesto
         accessibilityLabel={`Abrir detalle: ${title}`}
         android_ripple={{ color: "rgba(255,255,255,0.06)" }}
         style={[styles.contentTapArea, { paddingBottom: contentPaddingBottom }]}
