@@ -14,11 +14,15 @@ import {
   ScrollView,
   StatusBar,
   ActivityIndicator,
+  Platform,
+  ActionSheetIOS,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Heart, MapPin, ExternalLink, User2, Share2 } from "lucide-react-native";
+import MapView, { Marker } from "react-native-maps"; // Keep for map functionality
+import { ArrowLeft, Heart, MapPin, Share2, Calendar, Phone, MessageCircle, Banknote } from "lucide-react-native";
 
 import { useFavorites } from "../../context/FavoritesContext";
 import { useEvents } from "../../context/EventsContext";
@@ -28,25 +32,86 @@ import { getOptimizedImageUrl } from "../../utils/imageUtils";
 import { getEventImages, getMapAddress, getMapCoords, getOrganizer } from "../../adapters/eventAdapter";
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
-const HERO_H = Math.round(SCREEN_H * 0.6);
+const HERO_H = Math.round(SCREEN_H * 0.5); // 50%
 
 const COLORS = {
-  bg: "#F2F2F2",
-  text: "#6B645D",
-  textSoft: "rgba(107,100,93,0.75)",
-  border: "rgba(107,100,93,0.22)",
-  surface: "#FFFFFF",
-  coral: "#FF6969",
-  coralSoft: "rgba(255,105,105,0.12)",
+  bg: "#FFFFFF", // Pure white background
+  text: "#2D2D2D", // Dark text for body
+  textSoft: "#919191", // Use the accent for soft text
+  border: "#F0F0F0", // Very light border
+  surface: "#FFFFFF", // Pure white for contrast
+  accent: "#919191", // The main accent color
+  accentSoft: "#FBFBFB", // Organizer card background
 };
+
+// Minimalist map style (Silver)
+const mapStyle = [
+  { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
+  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
+  {
+    featureType: "administrative.land_parcel",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#bdbdbd" }],
+  },
+  {
+    featureType: "poi",
+    elementType: "geometry",
+    stylers: [{ color: "#eeeeee" }],
+  },
+  {
+    featureType: "poi",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#757575" }],
+  },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
+  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.arterial", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#dadada" }] },
+  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+  { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+  { featureType: "transit.line", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
+  { featureType: "transit.station", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9c9c9" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+];
 
 type Props = RootScreenProps<"EventDetail">;
 
-function openMaps(address?: string, lat?: number, lng?: number) {
-  let url = "https://www.google.com/maps/search/?api=1";
-  if (lat != null && lng != null) url += `&query=${lat},${lng}`;
-  else if (address) url += `&query=${encodeURIComponent(address)}`;
-  Linking.openURL(url).catch(() => {});
+function openNavigationChoice(lat: number, lng: number) {
+  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+  const wazeUrl = `waze://?ll=${lat},${lng}&navigate=yes`;
+  const appleMapsUrl = `http://maps.apple.com/?daddr=${lat},${lng}`;
+
+  const options = [
+    { text: 'Google Maps', onPress: () => Linking.openURL(googleMapsUrl).catch(() => Alert.alert("Error", "No se pudo abrir Google Maps.")) },
+    { text: 'Waze', onPress: () => Linking.openURL(wazeUrl).catch(() => Alert.alert("Error", "No se pudo abrir Waze. ¿Lo tienes instalado?")) },
+  ];
+
+  if (Platform.OS === 'ios') {
+    options.push({ text: 'Apple Maps', onPress: () => Linking.openURL(appleMapsUrl).catch(() => Alert.alert("Error", "No se pudo abrir Apple Maps.")) });
+  }
+
+  const cancelOption = { text: 'Cancelar', style: 'cancel' as const };
+  const alertOptions = [...options, cancelOption];
+
+  if (Platform.OS === 'ios') {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: alertOptions.map(o => o.text),
+        cancelButtonIndex: alertOptions.length - 1,
+      },
+      (buttonIndex) => {
+        if (buttonIndex < options.length) {
+          options[buttonIndex].onPress();
+        }
+      }
+    );
+  } else {
+    Alert.alert('Navegar a', 'Elige una aplicación de mapas', alertOptions);
+  }
 }
 
 export default function EventDetailScreen({ navigation, route }: Props) {
@@ -130,7 +195,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
     );
   }
 
-  const OVERLAP = Math.round(HERO_H * 0.12);
+  const OVERLAP = 40; // Floating card effect
 
   const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setIndex(Math.round(e.nativeEvent.contentOffset.x / SCREEN_W));
@@ -140,6 +205,10 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   const address = getMapAddress(event);
   const { latitude: lat, longitude: lng } = getMapCoords(event);
   const images = useMemo(() => getEventImages(event), [event]);
+  
+  // Asumimos que estos datos vienen del adaptador o del evento
+  const priceLabel = (event as any).priceLabel ?? 'Consultar';
+  const ticketUrl = (event as any).ticketUrl;
 
   return (
     <View style={styles.container}>
@@ -147,7 +216,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 120 }} // Space for sticky footer
       >
         {/* HERO */}
         <View style={styles.hero}>
@@ -174,8 +243,9 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                 )}
               />
               <LinearGradient
-                colors={["rgba(0,0,0,0.2)", "transparent", "rgba(0,0,0,0.6)"]}
-                style={StyleSheet.absoluteFill}
+                colors={["rgba(0,0,0,0.4)", "transparent", "rgba(0,0,0,0.5)"]}
+                locations={[0, 0.5, 1]}
+                style={styles.heroGradient}
                 pointerEvents="none"
               />
             </Animated.View>
@@ -190,28 +260,28 @@ export default function EventDetailScreen({ navigation, route }: Props) {
           )}
 
           <View style={[styles.header, { top: insets.top + 10 }]}>
-            <Pressable style={styles.iconBtn} onPress={navigation.goBack} hitSlop={10}>
-              <ArrowLeft size={22} color="white" />
+            <Pressable style={styles.glassBtn} onPress={navigation.goBack} hitSlop={10}>
+              <ArrowLeft size={22} color="white" strokeWidth={1.5} />
             </Pressable>
 
             {/* ✅ Grupo de acciones: Compartir y Favorito */}
             <View style={styles.headerActions}>
               <Pressable 
-                style={styles.iconBtn} 
+                style={styles.glassBtn}
                 onPress={() => shareEvent(event)} 
                 hitSlop={10}
                 accessibilityLabel="Compartir evento"
               >
-                <Share2 size={20} color="white" />
+                <Share2 size={20} color="white" strokeWidth={2} />
               </Pressable>
 
               <Pressable
-                style={styles.iconBtn}
+                style={styles.glassBtn}
                 onPress={() => (liked ? removeFavorite(event.id) : addFavorite(event.id))}
                 hitSlop={10}
                 accessibilityLabel={liked ? "Quitar de favoritos" : "Añadir a favoritos"}
               >
-                <Heart size={22} color={liked ? COLORS.coral : "white"} fill={liked ? COLORS.coral : "transparent"} />
+                <Heart size={22} color={liked ? COLORS.accent : "white"} fill={liked ? COLORS.accent : "transparent"} strokeWidth={2} />
               </Pressable>
             </View>
           </View>
@@ -225,65 +295,117 @@ export default function EventDetailScreen({ navigation, route }: Props) {
           ]}
         >
           <View style={styles.card}>
-            <Text style={styles.title} accessibilityRole="header">
-              {event.title}
-            </Text>
-
-            <View style={styles.meta}>
-              <Text style={styles.metaText}>{event.dateLabel}</Text>
-              <Text style={styles.metaDot}>•</Text>
-              <Text style={styles.metaText}>{event.locationLabel}</Text>
+            {/* 1. Título */}
+            <View style={styles.titleRow}>
+              <Text style={styles.mainTitle} accessibilityRole="header">
+                {event.title}
+              </Text>
             </View>
 
-            <Text style={styles.description}>{event.fullDescription}</Text>
+            <View style={styles.separator} />
 
-            <Pressable style={styles.cta} onPress={() => {}}>
-              <Text style={styles.ctaText}>Comprar entrada</Text>
-            </Pressable>
-
-            <View style={styles.divider} />
-
-            {/* GESTOR */}
-            <View style={styles.block}>
-              <View style={styles.blockHeader}>
-                <User2 size={18} color={COLORS.text} />
-                <Text style={styles.blockTitle}>Gestor</Text>
+            {/* 2. Fecha, Lugar y Precio */}
+            <View style={styles.logisticsGrid}>
+              <View style={styles.logisticsItem}>
+                <Calendar size={18} color={COLORS.textSoft} />
+                <Text style={styles.logisticsText}>{event.dateLabel}</Text>
               </View>
-
-              <Text style={styles.blockPrimary}>{organizer.name}</Text>
-              {organizer.organization ? (
-                <Text style={styles.blockSecondary}>{organizer.organization}</Text>
-              ) : null}
-            </View>
-
-            <View style={styles.divider} />
-
-            {/* COMO LLEGAR */}
-            <View style={styles.block}>
-              <View style={styles.blockHeader}>
-                <MapPin size={18} color={COLORS.text} />
-                <Text style={styles.blockTitle}>Cómo llegar</Text>
+              <View style={styles.logisticsItem}>
+                <MapPin size={18} color={COLORS.textSoft} />
+                <Text style={styles.logisticsText}>{event.locationLabel}</Text>
               </View>
-
-              <Text style={styles.addressText}>{address}</Text>
-
-              <Pressable
-                style={styles.mapBtn}
-                onPress={() => openMaps(address, lat, lng)}
-              >
-                <ExternalLink size={14} color={COLORS.text} />
-                <Text style={styles.mapBtnText}>Abrir en Maps</Text>
-              </Pressable>
+              <View style={styles.logisticsItem}>
+                <Banknote size={18} color={COLORS.textSoft} />
+                <Text style={styles.logisticsText}>{priceLabel}</Text>
+              </View>
             </View>
+
+            <View style={styles.separator} />
+
+            {/* 3. Descripción */}
+            <View>
+              <Text style={styles.descriptionSubtitle}>¡No te lo puedes perder!</Text>
+              <Text style={styles.descriptionText}>{event.fullDescription}</Text>
+            </View>
+
+            <View style={styles.separator} />
+
+            {/* 4. Tarjeta del Organizador */}
+            <View style={styles.organizerCard}>
+              <Image source={{ uri: (organizer as any).avatar_url }} style={styles.organizerAvatar} />
+              <View style={styles.organizerInfo}>
+                <Text style={styles.organizerLabel}>Organizado por</Text>
+                <Text style={styles.organizerName}>{organizer.name}</Text>
+              </View>
+              <View style={styles.organizerActions}>
+                {(organizer as any).phone && (
+                  <Pressable
+                    style={styles.organizerActionBtn}
+                    onPress={() => Linking.openURL(`tel:${(organizer as any).phone}`).catch(() => { })}
+                    hitSlop={10}
+                  >
+                    <Phone size={18} color={COLORS.text} strokeWidth={2} />
+                  </Pressable>
+                )}
+                <Pressable
+                  style={styles.organizerActionBtn}
+                  onPress={() => Alert.alert("Próximamente", "La mensajería con el organizador estará disponible pronto.")}
+                  hitSlop={10}
+                >
+                  <MessageCircle size={18} color={COLORS.text} strokeWidth={2} />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* 5. Mapa */}
+            {lat != null && lng != null && (
+              <>
+                <View style={styles.separator} />
+                <View>
+                  <Pressable onPress={() => openNavigationChoice(lat, lng)}>
+                    <MapView
+                      style={styles.map}
+                      customMapStyle={mapStyle}
+                      pointerEvents="none"
+                      initialRegion={{ latitude: lat, longitude: lng, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
+                    >
+                      <Marker coordinate={{ latitude: lat, longitude: lng }} pinColor={COLORS.accent} />
+                    </MapView>
+                  </Pressable>
+                </View>
+              </>
+            )}
           </View>
         </Animated.View>
       </ScrollView>
+
+      {/* Botón de accion reserva y  precio */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom || 16 }]}>
+        <LinearGradient colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 1)']} style={styles.footerGradient} />
+        <View style={styles.footerInner}>
+          <View style={styles.footerPrice}>
+            <Text style={styles.footerPriceLabel}>Precio Total</Text>
+            <Text style={styles.footerPriceValue}>{priceLabel}</Text>
+          </View>
+          <Pressable
+            style={styles.footerButton}
+            onPress={() => {
+              if (ticketUrl) Linking.openURL(ticketUrl).catch(() => {});
+              else Alert.alert("Entradas", "La información de entradas no está disponible.");
+            }}
+          >
+            <Text style={styles.footerButtonText}>
+              {priceLabel.toLowerCase() === 'gratis' ? 'Reservar Ahora' : 'Comprar Ticket'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  container: { flex: 1, backgroundColor: COLORS.surface },
   center: { alignItems: "center", justifyContent: "center", padding: 24 },
 
   errorTitle: { color: COLORS.text, fontWeight: "900", fontSize: 16, textAlign: "center" },
@@ -313,17 +435,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    zIndex: 20, // Ensure buttons are on top
   },
   headerActions: {
     flexDirection: "row",
     gap: 12, // ✅ Espacio entre compartir y corazón
   },
 
-  iconBtn: {
+  glassBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -343,57 +466,164 @@ const styles = StyleSheet.create({
   cardWrap: { paddingHorizontal: 16 },
   card: {
     backgroundColor: COLORS.surface,
-    borderRadius: 28,
-    padding: 20,
+    borderRadius: 40,
+    padding: 28,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
 
-  title: { fontSize: 24, fontWeight: "800", color: COLORS.text },
-  meta: { flexDirection: "row", marginVertical: 12 },
-  metaText: { color: COLORS.textSoft, fontWeight: "700", flexShrink: 1 },
-  metaDot: { marginHorizontal: 8, color: COLORS.textSoft },
-
-  description: { fontSize: 14, lineHeight: 20, color: COLORS.textSoft, marginBottom: 20 },
-
-  cta: {
-    height: 50,
-    borderRadius: 999,
+  separator: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 24,
+  },
+  
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 16,
+  },
+  mainTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: COLORS.text,
+    lineHeight: 38,
+    flex: 1,
+  },
+  priceChip: {
+    backgroundColor: COLORS.accentSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 99,
+    alignSelf: 'flex-start',
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  priceChipText: {
+    color: COLORS.accent,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  descriptionSubtitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  descriptionText: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: '400',
+    color: COLORS.text,
+  },
+
+  logisticsGrid: {
+    gap: 16,
+  },
+  logisticsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logisticsText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: COLORS.text,
+  },
+
+  organizerCard: {
+    backgroundColor: COLORS.accentSoft, // #FBFBFB
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  organizerInfo: {
+    flex: 1,
+  },
+  organizerAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.bg,
+    marginRight: 14,
+  },
+  organizerLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textSoft,
+  },
+  organizerName: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: "900",
+    marginTop: 2,
+  },
+  organizerActions: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  organizerActionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
   },
-  ctaText: { fontWeight: "900", color: COLORS.text },
 
-  divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 16 },
+  map: {
+    height: 200,
+    width: "100%",
+    borderRadius: 24,
+    overflow: "hidden",
+  },
 
-  block: { gap: 6 },
-  blockHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  blockTitle: { fontSize: 14, fontWeight: "800", color: COLORS.text },
-  blockPrimary: { fontSize: 14, fontWeight: "800", color: COLORS.text },
-  blockSecondary: { fontSize: 13, color: COLORS.textSoft },
-
-  addressText: {
-    fontSize: 13,
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  footerGradient: {
+    position: 'absolute',
+    top: -20,
+    left: 0,
+    right: 0,
+    height: 20,
+  },
+  footerInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  footerPriceLabel: {
     color: COLORS.textSoft,
-    flexWrap: "wrap",
-    flexShrink: 1,
-    maxWidth: "100%",
+    fontSize: 13,
+    fontWeight: '500',
   },
-
-  mapBtn: {
-    marginTop: 8,
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  footerPriceValue: {
+    color: '#919191',
+    fontSize: 22,
+    fontWeight: '300',
+    marginTop: 2,
   },
-  mapBtnText: { fontSize: 12, fontWeight: "800", color: COLORS.text },
+  footerButton: {
+    backgroundColor: '#919191',
+    height: 54,
+    borderRadius: 999, // Pill button
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexBasis: '60%',
+  },
+  footerButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '900',
+  },
 });
