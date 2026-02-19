@@ -2,6 +2,7 @@
 import React, { memo, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, Dimensions } from "react-native";
 import { Image, type ImageSource } from "expo-image";
+import { MapPin, Calendar, Clock } from "lucide-react-native"; // ✅ Importado
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -18,6 +19,11 @@ type Props = {
   description: string;
   image: MediaSource;
   chips: string[];
+  price: string;
+  city: string;
+  distance: string;
+  date: string;
+  time: string;
   eventId: string;
   priority?: "low" | "normal" | "high";
 };
@@ -27,7 +33,19 @@ const BASE_PADDING = 16;
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Discover">;
 
-function EventCard({ title, description, image, chips, eventId, priority = "normal" }: Props) {
+function EventCard({
+  title,
+  description,
+  image,
+  chips,
+  price,
+  city,
+  distance,
+  date,
+  time,
+  eventId,
+  priority = "normal",
+}: Props) {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
 
@@ -90,11 +108,32 @@ function EventCard({ title, description, image, chips, eventId, priority = "norm
           {title}
         </Text>
 
+        <View style={styles.infoRow}>
+          <MapPin size={14} color="rgba(255,255,255,0.9)" />
+          <Text style={styles.infoText}>{city}</Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Calendar size={14} color="rgba(255,255,255,0.9)" />
+          <Text style={styles.infoText}>{date}</Text>
+          <Text style={{ color: "rgba(255,255,255,0.5)" }}>•</Text>
+          <Clock size={14} color="rgba(255,255,255,0.9)" />
+          <Text style={styles.infoText}>{time}</Text>
+        </View>
+
+        <View style={styles.separator} />
+        
         <Text style={styles.description} numberOfLines={2}>
           {description}
         </Text>
 
-        <View style={styles.chips}>
+        {/* Fila de Cápsulas */}
+        <View style={styles.pillsRow}>
+          {city ? (
+            <View style={styles.chip}>
+              <Text style={styles.chipText} numberOfLines={1}>{city}</Text>
+            </View>
+          ) : null}
           {(chips ?? []).map((chip, idx) => (
             <View key={`${eventId}-${chip}-${idx}`} style={styles.chip}>
               <Text style={styles.chipText} numberOfLines={1}>
@@ -102,6 +141,9 @@ function EventCard({ title, description, image, chips, eventId, priority = "norm
               </Text>
             </View>
           ))}
+          {price ? (
+            <View style={styles.chip}><Text style={styles.chipText}>{price}</Text></View>
+          ) : null}
         </View>
       </Pressable>
     </View>
@@ -147,15 +189,31 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 28,
     fontWeight: "800",
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     marginBottom: 6,
+  },
+  infoText: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  separator: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginVertical: 12,
   },
   description: {
     color: "rgba(255,255,255,0.9)",
     fontSize: 15,
     lineHeight: 20,
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  chips: {
+  pillsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
   },
@@ -164,8 +222,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     backgroundColor: "rgba(255,255,255,0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
     marginRight: 8,
     marginBottom: 8,
   },

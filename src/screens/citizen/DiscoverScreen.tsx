@@ -1,8 +1,9 @@
 // src/screens/citizen/DiscoverScreen.tsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { StyleSheet, View, ActivityIndicator, Pressable, Text, StatusBar } from "react-native";
+import { StyleSheet, View, ActivityIndicator, Pressable, Text, StatusBar, Animated } from "react-native";
 import { Image } from "expo-image";
 import { Bell, User } from "lucide-react-native";
+import * as Haptics from "expo-haptics"; // ✅ Añadido para feedback háptico
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
@@ -33,6 +34,27 @@ export default function DiscoverScreen({ navigation }: Props) {
   const { user, profile } = useAuth(); // ✅ Extraemos profile también
   const { seenIds, isLoaded: seenLoaded, markAsSeen } = useSeenEvents(user?.id ?? "guest");
   const deckRef = useRef<PremiumSwipeDeckRef>(null);
+
+  // ✅ Hook genérico para animación y háptica de botones
+  const useAnimatedPress = () => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const handlePressIn = () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Animated.spring(scaleAnim, { toValue: 0.95, useNativeDriver: true }).start();
+    };
+
+    const handlePressOut = () => {
+      Animated.spring(scaleAnim, { toValue: 1, friction: 4, tension: 50, useNativeDriver: true }).start();
+    };
+
+    const animatedStyle = { transform: [{ scale: scaleAnim }] };
+    return { handlePressIn, handlePressOut, animatedStyle };
+  };
+
+  const settingsAnim = useAnimatedPress();
+  const eventsAnim = useAnimatedPress();
+  const profileAnim = useAnimatedPress();
 
   // ✅ Estado para el avatar firmado
   const [signedAvatar, setSignedAvatar] = useState<string | null>(null);
@@ -161,23 +183,35 @@ export default function DiscoverScreen({ navigation }: Props) {
       <View style={styles.fullscreen}>
         {/* HEADER */}
         <View style={[styles.header, { top: insets.top + 8 }]}>
-          <Pressable onPress={() => navigation.navigate("Notifications")} style={styles.iconBtn}>
-            <Bell size={22} color="white" />
-          </Pressable>
+          {/* Grupo Izquierdo */}
+          <View style={styles.headerGroup}>
+            {/* Botón de Notificaciones */}
+            <Animated.View style={settingsAnim.animatedStyle}>
+              <Pressable onPress={() => navigation.navigate("Notifications")} onPressIn={settingsAnim.handlePressIn} onPressOut={settingsAnim.handlePressOut} style={styles.iconBtn}>
+                <Bell size={22} color="white" />
+              </Pressable>
+            </Animated.View>
 
-          {/* ✅ Botón de perfil con Avatar dinámico */}
-          <Pressable onPress={() => navigation.navigate("Profile")} style={styles.iconBtn}>
-            {signedAvatar ? (
-              <Image 
-                source={{ uri: signedAvatar }} 
-                style={styles.avatarMini} 
-                contentFit="cover"
-                transition={200}
-              />
-            ) : (
-              <User size={22} color="white" />
-            )}
-          </Pressable>
+            {/* Botón 'Mis Eventos' */}
+            <Animated.View style={eventsAnim.animatedStyle}>
+              <Pressable onPress={() => navigation.navigate("MyEvents")} onPressIn={eventsAnim.handlePressIn} onPressOut={eventsAnim.handlePressOut} hitSlop={10}>
+                <View style={styles.pillBtn}>
+                  <Text style={styles.pillBtnText}>Mis eventos</Text>
+                </View>
+              </Pressable>
+            </Animated.View>
+          </View>
+
+          {/* Botón de Perfil (Derecha) */}
+          <Animated.View style={profileAnim.animatedStyle}>
+            <Pressable onPress={() => navigation.navigate("Profile")} onPressIn={profileAnim.handlePressIn} onPressOut={profileAnim.handlePressOut} style={styles.iconBtn}>
+              {signedAvatar ? (
+                <Image source={{ uri: signedAvatar }} style={styles.avatarMini} contentFit="cover" transition={200} />
+              ) : (
+                <User size={22} color="white" />
+              )}
+            </Pressable>
+          </Animated.View>
         </View>
 
         {isLoading || (!seenLoaded && !IS_DEV_SHOW_ALL_SEEN) ? (
@@ -203,7 +237,6 @@ export default function DiscoverScreen({ navigation }: Props) {
               ref={deckRef}
               data={data}
               stackSize={3}
-              swipeThreshold={120}
               onIndexChange={(i) => {
                 setCurrentIndex(i);
                 computePrefetch(i);
@@ -219,6 +252,12 @@ export default function DiscoverScreen({ navigation }: Props) {
                   image={event.image}
                   chips={event.chips}
                   priority="high"
+                  // ✅ Nuevas propiedades añadidas
+                  price={event.priceLabel ?? "Gratis"}
+                  city={event.locationLabel ?? "Bolívar"}
+                  distance="1.2 km" // Placeholder
+                  date={event.dateLabel ?? "Próximamente"}
+                  time="20:00" // Placeholder
                 />
               )}
               requestSwipeLeft={reqLeft}
@@ -260,15 +299,35 @@ const styles = StyleSheet.create({
     zIndex: 50,
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
   },
   iconBtn: {
     width: HEADER_BTN_SIZE,
     height: HEADER_BTN_SIZE,
     borderRadius: HEADER_BTN_SIZE / 2,
-    backgroundColor: "rgba(0,0,0,0.22)",
+    backgroundColor: "rgba(0, 0, 0, 0.15)",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden", // ✅ Necesario para que el avatar respete el radio
+  },
+  headerGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  pillBtn: {
+    height: HEADER_BTN_SIZE,
+    paddingHorizontal: 16,
+    borderRadius: HEADER_BTN_SIZE / 2,
+    backgroundColor: "rgba(0, 0, 0, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pillBtnText: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 14,
+    letterSpacing: 0.5,
   },
   avatarMini: {
     width: "100%",
