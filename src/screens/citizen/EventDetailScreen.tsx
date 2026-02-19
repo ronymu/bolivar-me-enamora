@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import MapView, { Marker } from "react-native-maps"; // Keep for map functionality
 import { ArrowLeft, Heart, MapPin, Share2, Calendar, Phone, MessageCircle, Banknote } from "lucide-react-native";
@@ -78,6 +79,8 @@ const mapStyle = [
   { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
 ];
 
+const EMOJI_POOL = ['✨', '🔥', '⚡️', '🚀', '🥳', '🎸', '🌟', '😎', '😁'];
+
 type Props = RootScreenProps<"EventDetail">;
 
 function openNavigationChoice(lat: number, lng: number) {
@@ -122,6 +125,11 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   const [isHydrating, setIsHydrating] = useState(false);
 
   const event = useMemo(() => getById(eventId), [getById, eventId]);
+
+  const randomEmojis = useMemo(() => {
+    const shuffled = [...EMOJI_POOL].sort(() => 0.5 - Math.random());
+    return [shuffled[0], shuffled[1]];
+  }, [eventId]);
 
   // Flag to determine if the full gallery data has been loaded from the backend.
   const isGalleryReady = useMemo(() => !!(event?.images && event.images.length > 0), [event]);
@@ -296,27 +304,15 @@ export default function EventDetailScreen({ navigation, route }: Props) {
         >
           <View style={styles.card}>
             {/* 1. Título */}
-            <View style={styles.titleRow}>
-              <Text style={styles.mainTitle} accessibilityRole="header">
-                {event.title}
-              </Text>
-            </View>
-
-            <View style={styles.separator} />
-
-            {/* 2. Fecha, Lugar y Precio */}
-            <View style={styles.logisticsGrid}>
-              <View style={styles.logisticsItem}>
-                <Calendar size={18} color={COLORS.textSoft} />
-                <Text style={styles.logisticsText}>{event.dateLabel}</Text>
+            <View>
+              <Text style={styles.mainTitle}>{event.title}</Text>
+              <View style={styles.infoRow}>
+                <MapPin size={14} color={COLORS.textSoft} />
+                <Text style={styles.infoText}>{event.locationLabel}</Text>
               </View>
-              <View style={styles.logisticsItem}>
-                <MapPin size={18} color={COLORS.textSoft} />
-                <Text style={styles.logisticsText}>{event.locationLabel}</Text>
-              </View>
-              <View style={styles.logisticsItem}>
-                <Banknote size={18} color={COLORS.textSoft} />
-                <Text style={styles.logisticsText}>{priceLabel}</Text>
+              <View style={styles.infoRow}>
+                <Calendar size={14} color={COLORS.textSoft} />
+                <Text style={styles.infoText}>{event.dateLabel}</Text>
               </View>
             </View>
 
@@ -324,7 +320,11 @@ export default function EventDetailScreen({ navigation, route }: Props) {
 
             {/* 3. Descripción */}
             <View>
-              <Text style={styles.descriptionSubtitle}>¡No te lo puedes perder!</Text>
+              <Text style={styles.descriptionSubtitle}>
+                <Text style={{ fontSize: 22 }}>{randomEmojis[0]} </Text>
+                ¡No te lo puedes perder!
+                <Text style={{ fontSize: 22 }}> {randomEmojis[1]}</Text>
+              </Text>
               <Text style={styles.descriptionText}>{event.fullDescription}</Text>
             </View>
 
@@ -379,26 +379,27 @@ export default function EventDetailScreen({ navigation, route }: Props) {
         </Animated.View>
       </ScrollView>
 
-      {/* Botón de accion reserva y  precio */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom || 16 }]}>
-        <LinearGradient colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 1)']} style={styles.footerGradient} />
-        <View style={styles.footerInner}>
-          <View style={styles.footerPrice}>
-            <Text style={styles.footerPriceLabel}>Precio Total</Text>
-            <Text style={styles.footerPriceValue}>{priceLabel}</Text>
+      {/* Floating Action Bar */}
+      <View style={[styles.footer, { bottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
+        <BlurView intensity={80} style={styles.footerBlur}>
+          <View style={styles.footerInner}>
+            <View>
+              <Text style={styles.footerPriceLabel}>Precio Total</Text>
+              <Text style={styles.footerPriceValue}>{priceLabel}</Text>
+            </View>
+            <Pressable
+              style={styles.footerButton}
+              onPress={() => {
+                if (ticketUrl) Linking.openURL(ticketUrl).catch(() => {});
+                else Alert.alert("Entradas", "La información de entradas no está disponible.");
+              }}
+            >
+              <Text style={styles.footerButtonText}>
+                {priceLabel.toLowerCase() === 'gratis' ? 'Reservar Ahora' : 'Comprar Ticket'}
+              </Text>
+            </Pressable>
           </View>
-          <Pressable
-            style={styles.footerButton}
-            onPress={() => {
-              if (ticketUrl) Linking.openURL(ticketUrl).catch(() => {});
-              else Alert.alert("Entradas", "La información de entradas no está disponible.");
-            }}
-          >
-            <Text style={styles.footerButtonText}>
-              {priceLabel.toLowerCase() === 'gratis' ? 'Reservar Ahora' : 'Comprar Ticket'}
-            </Text>
-          </Pressable>
-        </View>
+        </BlurView>
       </View>
     </View>
   );
@@ -478,18 +479,21 @@ const styles = StyleSheet.create({
     marginVertical: 24,
   },
   
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 16,
-  },
   mainTitle: {
     fontSize: 28,
-    fontWeight: '900',
+    fontWeight: '800',
+    lineHeight: 34,
     color: COLORS.text,
-    lineHeight: 38,
-    flex: 1,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  infoText: {
+    fontSize: 14,
+    color: COLORS.textSoft,
   },
   priceChip: {
     backgroundColor: COLORS.accentSoft,
@@ -515,20 +519,6 @@ const styles = StyleSheet.create({
   descriptionText: {
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: '400',
-    color: COLORS.text,
-  },
-
-  logisticsGrid: {
-    gap: 16,
-  },
-  logisticsItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logisticsText: {
-    fontSize: 14,
     fontWeight: '400',
     color: COLORS.text,
   },
@@ -583,24 +573,27 @@ const styles = StyleSheet.create({
 
   footer: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    left: 20,
+    right: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
   },
-  footerGradient: {
-    position: 'absolute',
-    top: -20,
-    left: 0,
-    right: 0,
-    height: 20,
+  footerBlur: {
+    borderRadius: 32,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   footerInner: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    padding: 8,
+    paddingLeft: 20,
+    gap: 12,
   },
   footerPriceLabel: {
     color: COLORS.textSoft,
@@ -608,18 +601,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   footerPriceValue: {
-    color: '#919191',
+    color: COLORS.text,
     fontSize: 22,
-    fontWeight: '300',
+    fontWeight: '700',
     marginTop: 2,
   },
   footerButton: {
-    backgroundColor: '#919191',
+    backgroundColor: '#F95C4B',
     height: 54,
     borderRadius: 999, // Pill button
     alignItems: 'center',
     justifyContent: 'center',
-    flexBasis: '60%',
+    flex: 1,
   },
   footerButtonText: {
     color: 'white',
