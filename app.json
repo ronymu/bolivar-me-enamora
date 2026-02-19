@@ -14,7 +14,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Necesitamos acceso a tu galería para que puedas seleccionar y subir una foto de perfil.",
+        "NSCameraUsageDescription": "Necesitamos acceso a tu cámara para que puedas tomar y subir una foto de perfil.",
+        "NSLocationWhenInUseUsageDescription": "Necesitamos tu ubicación para mostrarte eventos cercanos y ayudarte a navegar hacia ellos."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +27,14 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

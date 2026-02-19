@@ -10,8 +10,6 @@ type ExtraConfig = {
 
 export type AppConfig = {
   eventsSource: EventsSource;
-  supabaseUrl?: string;
-  supabaseAnonKey?: string;
   apiBaseUrl?: string;
 };
 
@@ -20,8 +18,6 @@ export function getAppConfig(): AppConfig {
 
   return {
     eventsSource: extra.EVENTS_SOURCE ?? "mock",
-    supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
-    supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     apiBaseUrl: extra.API_BASE_URL,
   };
 }

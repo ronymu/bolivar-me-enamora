@@ -8,11 +8,6 @@ import type { SupportedStorage } from "@supabase/gotrue-js";
 const url = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? "").trim();
 const anon = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "").trim();
 
-// DEBUG: Log para verificar que las variables de entorno se están cargando.
-console.log("[Supabase Init] URL loaded:", url.substring(0, 20) + '...');
-console.log("[Supabase Init] Anon Key loaded:", anon.substring(0, 10) + '...');
-
-    
 if (!url || !anon) {
   throw new Error(
     "Faltan variables de entorno: EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY. Asegúrate de tener un archivo .env."

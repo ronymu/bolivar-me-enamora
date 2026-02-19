@@ -1,7 +1,7 @@
 // src/data/events/apiEventsRepo.ts
 import type { EventsRepo } from "./eventsRepo";
 import type { ID, Event } from "../../types/domain";
-import { getSupabase } from "../../lib/supabaseClient";
+import { supabaseMobile } from "../../lib/supabaseMobileClient";
 import { adaptEventFromDb } from "../../adapters/eventAdapter";
 import { hydrateEventMediaRow } from "../../lib/mediaSigner";
 
@@ -109,7 +109,7 @@ function isZombie(row: any, nowMs: number) {
 
 export const apiEventsRepo: EventsRepo = {
   async listEvents(): Promise<Event[]> {
-    const supabase = getSupabase();
+    const supabase = supabaseMobile;
 
     const { data, error } = await supabase
       .from("events")
@@ -141,7 +141,7 @@ export const apiEventsRepo: EventsRepo = {
   },
 
   async getEventById(id: ID): Promise<Event | null> {
-    const supabase = getSupabase();
+    const supabase = supabaseMobile;
 
     const { data, error } = await supabase
       .from("events")
