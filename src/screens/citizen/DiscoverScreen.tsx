@@ -157,6 +157,7 @@ export default function DiscoverScreen({ navigation }: Props) {
   );
 
   const showFooter = !isLoading && !error && deckVisible && currentIndex < data.length;
+  const showOverallLoading = isLoading || (!seenLoaded && !IS_DEV_SHOW_ALL_SEEN);
 
   return (
     <LinearGradient
@@ -214,7 +215,7 @@ export default function DiscoverScreen({ navigation }: Props) {
           </Animated.View>
         </View>
 
-        {isLoading || (!seenLoaded && !IS_DEV_SHOW_ALL_SEEN) ? (
+        {showOverallLoading ? (
           <View style={styles.loadingState}>
             <ActivityIndicator color="white" />
           </View>
