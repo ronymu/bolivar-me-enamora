@@ -331,7 +331,15 @@ export default function EventDetailScreen({ navigation, route }: Props) {
               <Text style={styles.mainTitle}>{event.title}</Text>
               <View style={styles.infoRow}>
                 <MapPin size={14} color={COLORS.textSoft} />
-                <Text style={styles.infoText}>{event.locationLabel}</Text>
+                <Text style={styles.infoText}>
+                  {event.locationLabel}
+                  {event.distanceLabel ? (
+                    <Text>
+                      <Text style={{ color: COLORS.border }}> • </Text>
+                      <Text style={{ color: COLORS.text, fontWeight: "800" }}>{event.distanceLabel}</Text>
+                    </Text>
+                  ) : null}
+                </Text>
               </View>
               <View style={styles.infoRow}>
                 <Calendar size={14} color={COLORS.textSoft} />
@@ -392,6 +400,11 @@ export default function EventDetailScreen({ navigation, route }: Props) {
               <>
                 <View style={styles.separator} />
                 <View>
+                  {event.distanceLabel && (
+                    <View style={styles.proximityBadge}>
+                      <Text style={styles.proximityBadgeText}>📍 A {event.distanceLabel} de tu ubicación actual</Text>
+                    </View>
+                  )}
                   <Pressable onPress={() => openNavigationChoice(lat, lng)}>
                     <MapView
                       provider={PROVIDER_GOOGLE}
@@ -419,6 +432,9 @@ export default function EventDetailScreen({ navigation, route }: Props) {
             <View>
               <Text style={styles.footerPriceLabel}>Precio Total</Text>
               <Text style={styles.footerPriceValue}>{priceLabel}</Text>
+              {event.distanceKm != null && event.distanceKm < 1 && (
+                <Text style={styles.nearbyLabel}>✨ Destino cercano</Text>
+              )}
             </View>
             <Pressable
               style={styles.footerButton}
@@ -607,6 +623,21 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: "hidden",
   },
+  proximityBadge: {
+    backgroundColor: COLORS.accentSoft,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 14,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  proximityBadgeText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
 
   footer: {
     position: 'absolute',
@@ -641,6 +672,12 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 22,
     fontWeight: '700',
+    marginTop: 2,
+  },
+  nearbyLabel: {
+    color: '#4CAF50',
+    fontSize: 11,
+    fontWeight: '800',
     marginTop: 2,
   },
   footerButton: {

@@ -13,6 +13,8 @@ import type { EventsRepo } from "../data/events/eventsRepo";
 import { mockEventsRepo } from "../data/events/mockEventsRepo";
 import { apiEventsRepo } from "../data/events/apiEventsRepo";
 import { getAppConfig } from "../config/appConfig";
+import { useLocation } from "./LocationContext";
+import { formatDistance, getDistanceInKm } from "../utils/geoUtils";
 
 type EventsState = {
   events: Event[];
@@ -45,6 +47,8 @@ function pickRepo(): EventsRepo {
 
 export function EventsProvider({ children, repoOverride }: Props) {
   const repo = repoOverride ?? pickRepo();
+  
+  const { latitude, longitude } = useLocation();
 
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,9 +73,31 @@ export function EventsProvider({ children, repoOverride }: Props) {
     refresh();
   }, [refresh]);
 
+  const sortedEvents = useMemo(() => {
+    if (latitude == null || longitude == null || events.length === 0) {
+      return events;
+    }
+
+    const enriched = events.map((e) => {
+      const lat = e.location?.latitude;
+      const lon = e.location?.longitude;
+      let distanceKm: number | undefined;
+      let distanceLabel = "Distancia desconocida";
+
+      if (lat != null && lon != null) {
+        distanceKm = getDistanceInKm(latitude, longitude, lat, lon);
+        distanceLabel = formatDistance(distanceKm);
+      }
+
+      return { ...e, distanceKm, distanceLabel };
+    });
+
+    return enriched.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+  }, [events, latitude, longitude]);
+
   const getById = useCallback(
-    (id: ID) => events.find((e) => e.id === id),
-    [events]
+    (id: ID) => sortedEvents.find((e) => e.id === id),
+    [sortedEvents]
   );
 
   const hydrateById = useCallback(
@@ -101,8 +127,8 @@ export function EventsProvider({ children, repoOverride }: Props) {
   );
 
   const value = useMemo(
-    () => ({ events, isLoading, error, refresh, getById, hydrateById }),
-    [events, isLoading, error, refresh, getById, hydrateById]
+    () => ({ events: sortedEvents, isLoading, error, refresh, getById, hydrateById }),
+    [sortedEvents, isLoading, error, refresh, getById, hydrateById]
   );
 
   return <EventsContext.Provider value={value}>{children}</EventsContext.Provider>;

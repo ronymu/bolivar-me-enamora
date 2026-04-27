@@ -21,7 +21,7 @@ type Props = {
   chips: string[];
   price: string;
   city: string;
-  distance: string;
+  distanceLabel?: string;
   date: string;
   time: string;
   eventId: string;
@@ -40,7 +40,7 @@ function EventCard({
   chips,
   price,
   city,
-  distance,
+  distanceLabel,
   date,
   time,
   eventId,
@@ -111,6 +111,14 @@ function EventCard({
         <View style={styles.infoRow}>
           <MapPin size={14} color="rgba(255,255,255,0.9)" />
           <Text style={styles.infoText}>{city}</Text>
+          
+          {distanceLabel ? (
+            <>
+              <Text style={{ color: "rgba(255,255,255,0.5)" }}> • </Text>
+              <MapPin size={12} color="rgba(255,255,255,0.7)" />
+              <Text style={[styles.infoText, { color: "rgba(255,255,255,0.7)", marginLeft: -4 }]}>{distanceLabel}</Text>
+            </>
+          ) : null}
         </View>
 
         <View style={styles.infoRow}>

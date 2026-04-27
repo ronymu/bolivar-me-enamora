@@ -9,6 +9,7 @@ import AppNavigator from "./src/navigation/AppNavigator";
 import { FavoritesProvider } from "./src/context/FavoritesContext";
 import { EventsProvider } from "./src/context/EventsContext";
 import { AuthProvider } from "./src/context/AuthContext";
+import { LocationProvider } from "./src/context/LocationContext";
 
 const linking = {
   prefixes: [Linking.createURL("/")],
@@ -35,13 +36,15 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <EventsProvider>
-            <FavoritesProvider>
-              <NavigationContainer linking={linking}>
-                <AppNavigator />
-              </NavigationContainer>
-            </FavoritesProvider>
-          </EventsProvider>
+          <LocationProvider>
+            <EventsProvider>
+              <FavoritesProvider>
+                <NavigationContainer linking={linking}>
+                  <AppNavigator />
+                </NavigationContainer>
+              </FavoritesProvider>
+            </EventsProvider>
+          </LocationProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

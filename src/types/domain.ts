@@ -47,6 +47,8 @@ export type Event = {
   dateLabel: string; // e.g. "Hoy • 5:00 PM"
   priceLabel: string; // e.g. "$25.000 COP" | "Gratis"
   chips: string[];
+  distanceLabel?: string;
+  distanceKm?: number;
 
   // Media
   image: MediaSource; // principal (Discover)

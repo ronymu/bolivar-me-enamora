@@ -20,7 +20,12 @@ export const eventsMock: Event[] = [
       require("../../assets/images/getsemani-3.jpg"),
     ],
     organizer: { name: "Gestor cultural" },
-    location: { city: "Cartagena", address: "Getsemaní, Cartagena" },
+    location: { 
+      city: "Cartagena", 
+      address: "Getsemaní, Cartagena",
+      latitude: 10.4225,
+      longitude: -75.5441
+    },
   },
   {
     id: "2",
@@ -40,7 +45,12 @@ export const eventsMock: Event[] = [
       require("../../assets/images/jam-3.jpg"),
     ],
     organizer: { name: "Colectivo local" },
-    location: { city: "Cartagena", address: "Plaza de la Trinidad, Cartagena" },
+    location: { 
+      city: "Cartagena", 
+      address: "Plaza de la Trinidad, Cartagena",
+      latitude: 10.4208,
+      longitude: -75.5447
+    },
   },
   {
     id: "3",
@@ -60,6 +70,11 @@ export const eventsMock: Event[] = [
       require("../../assets/images/calles-3.jpg"),
     ],
     organizer: { name: "Ruta patrimonial" },
-    location: { city: "Cartagena", address: "Centro Histórico, Cartagena" },
+    location: { 
+      city: "Cartagena", 
+      address: "Centro Histórico, Cartagena",
+      latitude: 10.4244,
+      longitude: -75.5508
+    },
   },
 ];

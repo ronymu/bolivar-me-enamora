@@ -256,7 +256,7 @@ export default function DiscoverScreen({ navigation }: Props) {
                   // ✅ Nuevas propiedades añadidas
                   price={event.priceLabel ?? "Gratis"}
                   city={event.locationLabel ?? "Bolívar"}
-                  distance="1.2 km" // Placeholder
+                  distanceLabel={event.distanceLabel}
                   date={event.dateLabel ?? "Próximamente"}
                   time="20:00" // Placeholder
                 />
