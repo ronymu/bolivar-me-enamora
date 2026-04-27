@@ -12,7 +12,7 @@ import { AuthProvider } from "./src/context/AuthContext";
 import { LocationProvider } from "./src/context/LocationContext";
 
 const linking = {
-  prefixes: [Linking.createURL("/")],
+  prefixes: [Linking.createURL("/"), "bolivar-me-enamora://"],
   config: {
     screens: {
       // Auth
