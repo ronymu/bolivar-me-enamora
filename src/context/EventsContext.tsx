@@ -29,6 +29,11 @@ type EventsState = {
    * - Lo guarda/actualiza en el cache local (events[])
    */
   hydrateById: (id: ID) => Promise<Event | null>;
+
+  /**
+   * ✅ Hidrata múltiples eventos en una sola llamada desde backend
+   */
+  hydrateByIds: (ids: ID[]) => Promise<Event[]>;
 };
 
 const EventsContext = createContext<EventsState | null>(null);
@@ -126,9 +131,40 @@ export function EventsProvider({ children, repoOverride }: Props) {
     [repo]
   );
 
+  const hydrateByIds = useCallback(
+    async (ids: ID[]) => {
+      if (!ids || ids.length === 0) return [];
+      try {
+        // ⚠️ Requiere que implementes listEventsByIds en tu EventsRepo
+        const fullEvents = await (repo as any).listEventsByIds(ids);
+        if (!fullEvents || fullEvents.length === 0) return [];
+
+        setEvents((prev) => {
+          const next = [...prev];
+          fullEvents.forEach((fullEvent: Event) => {
+            const idx = next.findIndex((e) => e.id === fullEvent.id);
+            if (idx === -1) {
+              next.push(fullEvent);
+            } else {
+              // ✅ Merge suave
+              next[idx] = { ...next[idx], ...fullEvent };
+            }
+          });
+          return next;
+        });
+
+        return fullEvents;
+      } catch (e) {
+        console.warn("[EventsContext] hydrateByIds failed:", e);
+        return [];
+      }
+    },
+    [repo]
+  );
+
   const value = useMemo(
-    () => ({ events: sortedEvents, isLoading, error, refresh, getById, hydrateById }),
-    [sortedEvents, isLoading, error, refresh, getById, hydrateById]
+    () => ({ events: sortedEvents, isLoading, error, refresh, getById, hydrateById, hydrateByIds }),
+    [sortedEvents, isLoading, error, refresh, getById, hydrateById, hydrateByIds]
   );
 
   return <EventsContext.Provider value={value}>{children}</EventsContext.Provider>;

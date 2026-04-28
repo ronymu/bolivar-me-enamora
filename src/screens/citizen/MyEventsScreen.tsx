@@ -22,7 +22,7 @@ const COLORS = {
 
 export default function MyEventsScreen({ navigation }: Props) {
   const { favoriteIds, removeFavorite, isFavorite } = useFavorites();
-  const { getById, hydrateById, isLoading: isListLoading } = useEvents();
+  const { getById, hydrateByIds, isLoading: isListLoading } = useEvents();
 
   const [isHydrating, setIsHydrating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,14 +44,14 @@ export default function MyEventsScreen({ navigation }: Props) {
     setError(null);
 
     try {
-      // Hidrata todos los IDs (si ya está en cache, mergea suave)
-      await Promise.all(favoriteIds.map((id) => hydrateById(id)));
+      // ✅ Hidrata todos los eventos en una sola consulta de red
+      await hydrateByIds(favoriteIds);
     } catch (e: any) {
       setError(e?.message ?? "No se pudieron cargar tus eventos guardados.");
     } finally {
       setIsHydrating(false);
     }
-  }, [favoriteIds, hydrateById]);
+  }, [favoriteIds, hydrateByIds]);
 
   useEffect(() => {
     hydrateMissing();
